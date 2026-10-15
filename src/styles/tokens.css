@@ -1,0 +1,67 @@
+@import 'tailwindcss';
+
+/* ══════════════════════════════════════════════════════════════
+   设计 token —— 零彩色系统
+   色板只有中性灰阶，色相恒定、饱和度为 0。
+   强调靠明度反转，不靠色相。唯一色彩来源是车辆照片本身。
+   ══════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* 中性灰阶（zinc 系，纯灰无色相） */
+  --color-ink-0: #ffffff;
+  --color-ink-50: #fafafa;
+  --color-ink-100: #f4f4f5;
+  --color-ink-200: #e4e4e7;
+  --color-ink-300: #d4d4d8;
+  --color-ink-400: #a1a1aa;
+  --color-ink-500: #71717a;
+  --color-ink-600: #52525b;
+  --color-ink-700: #3f3f46;
+  --color-ink-800: #27272a;
+  --color-ink-900: #18181b;
+  --color-ink-950: #0a0a0a;
+
+  /* 电影级缓动曲线 */
+  --ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-swift: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 字体 —— 两套，用途严格分开，见 CLAUDE.md §1.2 */
+  --font-sans: 'Inter', 'Noto Sans SC', 'Source Han Sans SC', system-ui, -apple-system, sans-serif;
+  /* 展示体只给全大写的拉丁文字用。Oswald 没有 CJK 字形，
+     中文落进来会掉回 Noto，一行两种字体 —— 所以混排标题不要用它。 */
+  --font-display: 'Oswald', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* 容器 */
+  --spacing-gutter: 2rem;
+}
+
+/* ── 语义层：全站唯一基调，白底 ───────────────────────────────
+   曾经这里是「亮区 / 暗区」两套，靠 .theme-dark 切。2026-10-15 起全站亮色，
+   暗色那套已删除 —— 不要再加回来，需要压暗某个区块就在组件里局部处理。 */
+:root {
+  --bg: var(--color-ink-0);
+  --bg-raised: var(--color-ink-50);
+  --bg-sunken: var(--color-ink-100);
+  --fg: var(--color-ink-950);
+  --fg-muted: var(--color-ink-500);
+  --fg-subtle: var(--color-ink-400);
+  --line: var(--color-ink-200);
+  --invert-bg: var(--color-ink-950);
+  --invert-fg: var(--color-ink-0);
+  --shadow-key: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -8px rgb(0 0 0 / 0.08);
+}
+
+/* 用 inline 让工具类引用运行时变量 */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-sunken: var(--bg-sunken);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-line: var(--line);
+  --color-invert: var(--invert-bg);
+  --color-invert-fg: var(--invert-fg);
+}
