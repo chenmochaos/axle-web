@@ -15,7 +15,8 @@ U2Net 的前后处理只有几十行，直接用 onnxruntime 跑更可控。
 
 模型首次运行自动下载（u2netp，4.6MB）到 ~/.cache/hmdp-cutout/。
 模型输入固定 320×320 —— 这是 U2Net 系列的硬限制，不是配置问题，
-边缘质量靠后处理（羽化 + 最大连通域）补。
+边缘质量靠后处理（羽化 + 最大连通域）补。**投喂前按长边等比缩放再补边**
+（见 `infer`）：直接把非正方形源图拉成正方形会让车变形，竖幅素材受害最重。
 
 换更好的模型：`--model isnet-general-use`，边缘更锐，但要下 176MB。
 
@@ -97,18 +98,37 @@ def infer(sess, img: Image.Image, size: int):
     **不写盘**，cut() 与 --check 共用这一条路径 —— 否则检查出来的指标
     反映的就不是真正落盘的那个产物了。
 
+    ── 为什么要补边而不是直接 resize 成 size×size ──────────────────
+    模型输入是正方形。原来的写法 `img.resize((size, size))` 会把**非正方形**的
+    源图强行拉成正方形，于是车在模型眼里变了形：3000×4000 的竖幅 MX-5，
+    x 方向压 0.107、y 方向压 0.080，喂进去的是一台**横向胖了 33%** 的车 ——
+    轮廓失真、轮子被吃掉一块，而且横竖幅越悬殊烂得越明显。素材全是横幅时
+    看不出来，MX-5 一进来就暴露了。
+    改成按长边等比缩放到 size、余下方向补到均值色（= 归一化后的 0，即中性），
+    推理完把补边裁掉再插值回原尺寸。
+
     comp_sizes 是大→小排好的连通域面积，用来看背景里有没有第二坨东西。
     """
     ow, oh = img.size
 
-    x = np.asarray(img.resize((size, size), Image.LANCZOS), dtype=np.float32) / 255.0
+    scale = size / max(ow, oh)
+    nw, nh = max(1, round(ow * scale)), max(1, round(oh * scale))
+    ox, oy = (size - nw) // 2, (size - nh) // 2
+
+    canvas = Image.new('RGB', (size, size), tuple(int(round(v * 255)) for v in MEAN))
+    canvas.paste(img.resize((nw, nh), Image.LANCZOS), (ox, oy))
+
+    x = np.asarray(canvas, dtype=np.float32) / 255.0
     x = np.transpose((x - MEAN) / STD, (2, 0, 1))[None].astype(np.float32)
 
     pred = sess.run(None, {sess.get_inputs()[0].name: x})[0][0, 0]
     pred = (pred - pred.min()) / (pred.max() - pred.min() + 1e-8)
 
+    # 先裁掉补边再缩放 —— 顺序反了会把补边插值进车身轮廓
     prob = np.asarray(
-        Image.fromarray((pred * 255).astype(np.uint8)).resize((ow, oh), Image.LANCZOS),
+        Image.fromarray((pred * 255).astype(np.uint8))
+        .crop((ox, oy, ox + nw, oy + nh))
+        .resize((ow, oh), Image.LANCZOS),
         dtype=np.float32,
     )
     binary = prob > 128
