@@ -17,6 +17,7 @@ jmeter.log
 
 # 抠图脚本的独立虚拟环境（见 scripts/cutout-cars.py）
 .cutout-venv/
+__pycache__/
 
 # 编辑器 / 系统
 .DS_Store

@@ -80,7 +80,7 @@ python3 -m venv .cutout-venv
 
 ## 设计约定
 
-三条硬约束，写在 `CLAUDE.md` 里，改样式前先读：
+五条硬约束，写在 `CLAUDE.md` 里，改样式前先读：
 
 1. **全站亮色。** 统一 `#FFFFFF` 底，没有暗色区域，`tokens.css` 里也不再有暗色主题类。
    唯一例外是压在车辆照片上的覆盖层。
@@ -90,8 +90,17 @@ python3 -m venv .cutout-venv
    车名、栏目标签。中文正文走 `--font-sans`（Inter + Noto Sans SC）。Oswald 没有 CJK 字形，
    中英混排的标题不能用它，否则一行里会掉回两种字体。
 
-首屏还有一条结构性约定：**车台盒子的尺寸写死**（`.hero-stage`），车图在盒内 `object-contain`。
-这样切换车辆时页面高度不变、所有车按高度归一、轮胎着地线恒定 —— 倒影和接地阴影才有稳定基准。
+首屏还有一条结构性约定：**车台盒子的尺寸写死**（`.hero-stage`），车图在盒内贴合下沿。
+这样切换车辆时页面高度不变、轮胎着地线恒定 —— 倒影和接地阴影才有稳定基准。
+盒内按**面积**归一（`h = sqrt(A / r)`，见 `src/lib/fit.ts`）：所有车占据相同面积，
+长宽比只决定它是宽而扁还是高而瘦。按高度归一的话，宽体车与高瘦车的面积差到 1.48 倍，
+高瘦的那台看起来就是小一号。
+
+**开场黑幕**只在「首页 + 本次会话首次访问 + 未要求减弱动效」时放一次 ——
+深链与站内导航都不放，开场是进入体验的门，不是每次导航的收费站。
+放不放的判断只写在 `index.html` 的 `<head>` 内联脚本里（必须早于 bundle 才能防住首帧白闪），
+`src/lib/intro.ts` 只读它留下的 class。站内换页走 `App.vue` 的 `<Transition mode="out-in">`，
+所以 `SiteLayout` 在 `App.vue`，**view 里不要再包一层**。
 
 ## 目录结构
 
@@ -99,13 +108,13 @@ python3 -m venv .cutout-venv
 src/
 ├── api/          接口层，按后端模块分文件（client / car / mock / types）
 ├── components/
-│   ├── business/ 业务组件（HeroSection / BrandNav / CarCard / FeaturedCars / ReviewFeed）
+│   ├── business/ 业务组件（IntroCurtain / HeroSection / BrandNav / CarCard / FeaturedCars / ReviewFeed）
 │   └── ui/       无业务语义的基础组件（AppButton / AppTag / StatCount / SkeletonBlock）
 ├── composables/  useReveal（滚动入场）/ useCountUp（数字滚动）/ useScrollTo
-├── layouts/      SiteLayout（全站统一布局）
-├── lib/          gsap / lenis 单例
+├── layouts/      SiteLayout（全站统一布局，由 App.vue 包住 RouterView）
+├── lib/          gsap / lenis / intro 单例；fit.ts（车台面积归一公式）
 ├── router/
-├── styles/       tokens.css（设计 token）+ main.css
+├── styles/       tokens.css（设计 token）+ main.css（含路由转场）
 └── views/
 docs/
 ├── specs/        设计文档
@@ -114,7 +123,7 @@ docs/
 
 ## 进度
 
-M1（首页）已完成：首屏轮播、品牌导航、精选车源、热门口碑、页脚。
+M1（首页）已完成：首屏轮播、大类切换（全部 / 汽车 / 摩托）、品牌导航、精选车源、热门口碑、页脚。
 其余路由先落到 `PlaceholderView`，URL 结构与 `meta.milestone` 已定死，后续按里程碑填实现：
 
 | 里程碑 | 页面 |
@@ -129,5 +138,12 @@ M1（首页）已完成：首屏轮播、品牌导航、精选车源、热门口
 - **车辆照片是演示用占位素材**，来自公开图库与网络，**未取得明确商用授权**，
   其中部分照片含厂商标识与车牌。它们仅用于演示界面效果。
   本仓库的代码与这些图片的授权是两件事 —— 要在任何正式场景使用，请先替换 `public/cars/` 下的图片。
+- 自己换素材的方法（去哪找图、放哪、分辨率要求、选图标准）见
+  [`docs/specs/2026-10-15-二手车平台-design.md`](docs/specs/2026-10-15-二手车平台-design.md) §3.6，
+  首屏选车口径（朝向 / 配色 / 为什么不能靠缩略图判断）见 §3.7。
+  一句话版本：找一张干净的实景侧身照（Unsplash / Pexels，免费商用），
+  长边 ≥ 2500px，整车完整入画且四周留白，让抠图流水线处理背景。
+  入库前用 `scripts/cutout-cars.py --check` 筛一遍 —— 但它只是筛子，
+  产物要放大到 600px 以上人眼过一遍，玻璃幕墙这类与车身连成一片的背景它查不出来。
 - 字体 Inter 与 Oswald 通过 Google Fonts 加载，授权为 SIL Open Font License 1.1。
 - 仓库暂未附 LICENSE 文件。

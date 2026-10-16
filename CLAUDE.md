@@ -95,6 +95,42 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
 
 `prefers-reduced-motion` 必须降级。只动 `transform` / `opacity`，不动 `width` / `top` / `margin`。
 
+### 5. 开场与转场
+
+**开场黑幕只在「首页 + 本次会话首次访问 + 无 `prefers-reduced-motion`」时放**，
+深链与二次导航都不放。放不放的判断只写在 `index.html` 的 `<head>` 内联脚本里
+（它必须早于 bundle 执行才能防首帧白闪），`src/lib/intro.ts` 只读它留下的
+`intro-boot` class —— **判断逻辑只有一份，两边都要改就是 bug**。
+
+`SiteLayout` 由 `App.vue` 包住 `RouterView`，**view 里不要再包一层** ——
+每个 view 各包一层会让换路由时 header/footer 一起重建，转场就没法做。
+`<main>` 的 `min-h-[100svh]` 是 `mode="out-in"` 的配套：否则旧内容卸载的瞬间
+main 塌成 0 高，footer 会跳到页首。
+
+切路由后必须显式 `lenis.scrollTo(0, { immediate: true })` —— router 的 `scrollBehavior`
+走 `window.scrollTo`，Lenis 的内部 `targetScroll` 不跟着变，下一帧会被拉回去。
+**所以 router 里没有 `scrollBehavior`，别再往 `router/index.ts` 里加回去**；
+归零挂在 `App.vue` 的 `<Transition @after-leave>` 上（不能挂在路由 watcher 上，
+`out-in` 的 0.3s 离开期间滚到顶会被看见）。
+
+转场 CSS（`.route-*-active` / `.route-*-from` / `.route-*-to`）必须在全局 `main.css`，
+不能写进任何组件的 `<style scoped>` —— `<Transition name="route">` 由 `App.vue` 直接渲染，
+没有 scoped 宿主，写进去匹配不到，表现为「转场静默失效」。
+
+### 6. 列表重新渲染必须换 key
+
+`[data-reveal]` 元素的初始 `opacity: 0` 是 **`main.css` 的 CSS 规则**给的，不是内联样式 ——
+入场动画由 `useReveal` 在 `onMounted` 里跑一次，把 opacity 动画到 1。
+
+所以：**任何在挂载之后被换掉内容的列表，必须让宿主组件重新挂载**，否则新元素拿到
+CSS 给的 `opacity: 0`，背后却没有任何动画去揭开它们 —— 整个列表隐形，而且控制台一片安静。
+
+现例：`HomeView` 切大类时 `<FeaturedCars :key="kind" :cars="cars" />`。两条纪律：
+
+- `:key` 要跟着**数据**变，不能跟着别的状态变
+- 换数据与换 key 必须在**同一个 tick** 里赋值（`cars.value = list` 后再 `kind.value = next`，
+  中间不许 `await`）。先换 key 会让组件带着旧数据重挂一次，动画就作用在旧卡片上了
+
 ## 目录
 
 ```
@@ -102,10 +138,10 @@ src/
 ├── api/          接口层，按后端模块分文件；client.ts 是 axios 实例
 ├── components/
 │   ├── ui/       通用组件：AppButton / AppTag / SkeletonBlock / StatCount
-│   └── business/ 业务组件：HeroSection / BrandNav / CarCard / FeaturedCars / ReviewFeed
+│   └── business/ 业务组件：HeroSection / IntroCurtain / KindTabs / BrandNav / CarCard / FeaturedCars / ReviewFeed
 ├── composables/  useCountUp / useReveal / useScrollTo
-├── layouts/      SiteLayout（全站唯一布局）
-├── lib/          gsap / lenis 单例
+├── layouts/      SiteLayout（全站唯一布局，App.vue 用它包住 RouterView）
+├── lib/          gsap / lenis / intro 单例，fit.ts（车台面积归一公式）
 ├── router/
 ├── styles/       tokens.css（设计 token）+ main.css
 └── views/
@@ -126,9 +162,35 @@ docs/             specs/ 设计文档、plans/ 实施计划、screenshots/ READM
 
 ## 素材
 
-车辆图是**演示用占位素材**，来自公开图库与网络，**来源与授权未核实**，部分含厂商标识与车牌。
-仓库公开不等于这些图可商用 —— 要在正式场景使用必须先替换 `public/cars/`。
+**完整规格见 `docs/specs/2026-10-15-二手车平台-design.md` §3.6 / §3.7**，换图前先读那两节。要点：
 
-这批照片是「平光记录照」，调性由界面统一：局部裁切 + 底部渐变遮罩（列表卡片）；
-首屏则走抠图路线 —— `scripts/cutout-cars.py` 把车抠成透明 WebP 放在白底上。
-素材可整体替换，动效与设计语言不依赖具体图。
+- **别找「已经是透明 PNG」的图** —— 那类站基本禁商用（pngimg 是 CC BY-NC 4.0）。
+  找一张干净的实景照（Unsplash / Pexels 免费商用），抠图交给 `scripts/cutout-cars.py`。
+- 放 `public/cars/`，命名 `品牌-车型.jpg`（kebab-case），跑抠图生成 `public/cars/cut/*.webp`，
+  再到 `src/api/mock.ts` 加条目。
+- 源图**长边 ≥ 2500px**：抠图产物封顶 1600px，首屏够用，但 M2 详情页 DPR2 下要 2880px。
+- 选图比分辨率重要：正侧或轻微 3/4、**整车完整入画且四周留白**（贴边会被切）、
+  背景干净、投影轻、画面里不要有人或第二台车（最大连通域会选错主体）。
+- 筛图用 `--check`，别等抠完才发现不能用：
+
+  ```bash
+  .cutout-venv/bin/python scripts/cutout-cars.py --check --src public/cars
+  ```
+
+- **`--check` 是筛子不是判官**：它查不出「背景结构物与车身连成一片」——
+  玻璃幕墙、招牌、栏杆与车顶在像素上连通时，抠图会把它们当成车顶行李架糊上去，
+  而连通域/半透明/长宽比指标全绿。**抠完必须做两件事，缺一不可**：
+  ① 轮廓最后几行宽度单调收窄到接近 0（否则是「少轮子」：轮廓被一条水平线切断）；
+  ② **合成到深底上放大到 ≥600px 人眼看**（白底会把混进来的浅色地面、阴影藏起来，
+  深底让非车身像素现形）。缩略图两样都看不出来。
+- **`cutout` 字段的语义是「这台车能上首屏」**，不是「这台车有抠图」——
+  它唯一的下游是 `HeroSection`（`cutout ?? images[0]`），卡片一律用原图。
+  抠图脏就撤掉这个字段，宁可缺；留着等于在数据里说谎。入选口径只有「抠图干净」一条
+  （§3.7），**车头朝向不作要求**。
+
+**`mockCars[].images[0]` 必须指向真实存在的文件。** 指向已删文件的卡片会静默渲染成空图，
+不报错 —— 换素材时这是要跟着改的，不是「反正 mock 无所谓」。
+
+现有素材是**演示用占位素材**，来自公开图库与网络，**来源与授权未核实**，部分含厂商标识与车牌。
+仓库公开不等于这些图可商用。这批照片是「平光记录照」，调性由界面统一：局部裁切 + 底部渐变遮罩
+（列表卡片）；首屏走抠图路线放在白底上。素材可整体替换，动效与设计语言不依赖具体图。
