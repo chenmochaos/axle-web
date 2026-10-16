@@ -34,6 +34,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { gsap } from '@/lib/gsap'
+import { displayName } from '@/lib/carName'
 import { prefersReducedMotion } from '@/lib/lenis'
 import { fitByArea } from '@/lib/fit'
 import { introDone } from '@/lib/intro'
@@ -91,8 +92,9 @@ function recordRatio(car: Car | undefined, e: Event) {
   ratios.value[car.id] = el.naturalWidth / el.naturalHeight
 }
 
-/** 首屏车名走展示体，不想要「(992)」这种底盘代号后缀 */
-const displayName = computed(() => current.value?.name.replace(/\s*[（(][^)）]*[)）]\s*$/, '') ?? '')
+/** 车名去掉「(992)」这类底盘代号后缀。口径在 `@/lib/carName` —— 详情页用的是同一份，
+ *  两页各写一遍必然漂移，而漂移是「同一台车在两页显示成两个名字」。 */
+const heroName = computed(() => (current.value ? displayName(current.value.name) : ''))
 
 const specs = computed(() => {
   const c = current.value
@@ -317,7 +319,7 @@ onUnmounted(() => {
         <p
           class="font-display text-[clamp(1.05rem,1.7vw,1.5rem)] leading-none font-medium tracking-[0.09em] text-fg uppercase"
         >
-          {{ displayName }}
+          {{ heroName }}
         </p>
         <p class="tnum mt-3.5 text-[13px] text-fg-muted">
           <template v-for="(s, i) in specs" :key="s">

@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Car } from '@/api/types'
+import { flipId, recordFlipSource } from '@/lib/flip'
 import { useCountUp } from '@/composables/useCountUp'
 import AppTag from '../ui/AppTag.vue'
 
 const props = defineProps<{ car: Car }>()
+
+/**
+ * FLIP 转场的资料来源。它挂在**图片容器**上而不是 `<img>` 上，两个原因：
+ *
+ * 1. `getBoundingClientRect()` **包含 transform**。鼠标点在卡片上时必然触发
+ *    `group-hover:scale-[1.05]`，量 img 得到的是放大了 5% 的框，于是 hero 图会从
+ *    一个比卡片大一圈的地方起飞。容器没有被缩放，量它才是卡片真正的图区。
+ * 2. 容器就是图区 —— `img` 是 `h-full w-full object-cover`，两者同框。
+ */
+const frame = ref<HTMLElement | null>(null)
 
 /** 二手车语境用「万」报价，比 1388000 好读 */
 const priceInWan = computed(() => props.car.price / 10000)
@@ -24,11 +35,20 @@ const isFirstOwner = computed(() => props.car.ownerCount === 0)
 
 <template>
   <article class="group">
-    <RouterLink :to="`/car/${car.id}`" class="block focus-visible:outline-none">
+    <!-- `@click` 只为记下 FLIP 源；导航仍由 RouterLink 自己做。
+         必须在此刻记 —— 路由转场是 `mode="out-in"`，整页卸载后这个元素就量不到了。 -->
+    <RouterLink
+      :to="`/car/${car.id}`"
+      class="block focus-visible:outline-none"
+      @click="recordFlipSource(frame)"
+    >
       <!-- 车图占绝对主体。UI 退成背景，任何装饰不许抢戏。 -->
-      <div class="relative aspect-[4/3] overflow-hidden rounded-[1.25rem] bg-bg-raised">
+      <div
+        ref="frame"
+        :data-flip-id="flipId(car.id)"
+        class="relative aspect-[4/3] overflow-hidden rounded-[1.25rem] bg-bg-raised"
+      >
         <img
-          :data-flip-id="`car-image-${car.id}`"
           :src="car.images[0]"
           :alt="car.name"
           loading="lazy"
