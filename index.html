@@ -10,35 +10,45 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-    <!-- 开场幕布的「防白闪」：条件判断只写在这里，src/lib/intro.ts 读的就是这个 class。
+    <!-- 开场的「防白闪」：条件判断只写在这里，src/lib/intro.ts 读的就是这个 class。
          必须内联、必须早于 bundle、也必须早于下面那条字体样式表 ——
          浏览器会阻塞普通 <script> 直到前面的样式表就绪（脚本可能查询样式），
          字体 CDN 慢的时候这段判断就会跟着被推迟。放这里它只依赖 preconnect。
-         判断条件（三条全中才放幕布）：首页 + 本次会话首次 + 用户没要求减弱动效。 -->
+
+         放不放的判断（2026-10-16 改）：
+         · **每次完整文档加载都放**，不分路由、不看是否本会话第一次。理由是「开场是
+           进入体验的门」，而「进入」= 一次完整文档加载；站内 SPA 导航根本不重新执行
+           这段脚本，所以天然不会放 —— 不需要 sessionStorage 帮忙去记。
+           上一版用 sessionStorage 记「已放过」，副作用是**刷新也不再放**，
+           而刷新恰恰是最常见的「重新进入」，等于把门焊死了。
+         · `?nointro` 跳过：开发时刷新很频繁，需要一个不依赖系统设置的开关。
+         · 用户要求减弱动效时不放。 -->
     <script>
       ;(function () {
         try {
-          if (location.pathname !== '/') return
-          if (sessionStorage.getItem('axle:intro') === '1') return
+          if (new URLSearchParams(location.search).has('nointro')) return
           if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
           document.documentElement.classList.add('intro-boot')
-          // 兜底：bundle 加载失败时没人来撤这块黑，5 秒后自己撤掉。
+          // 兜底：bundle 加载失败时没人来撤这块白，6 秒后自己撤掉。
           // 正常路径下幕布挂载时（约 2.2s 前）已经撤过，这里是空操作。
           setTimeout(function () {
             document.documentElement.classList.remove('intro-boot')
-          }, 5000)
+          }, 6000)
         } catch (e) {
-          /* 隐私模式下 sessionStorage 会抛 —— 直接跳过开场，别把页面留在黑屏 */
+          /* 内联脚本异常就直接跳过开场，别把页面留在幕布后面 */
         }
       })()
     </script>
     <style>
-      /* 只能内联：main.css 随 bundle 加载，等它到了白底已经闪过了。
-         色值 = --color-ink-950，这里取不到 token，硬编码是有意的例外。
+      /* 只能内联：main.css 随 bundle 加载，等它到了底色已经闪过了。
+         色值必须与幕布同色（`--bg` = ink-0 = #FFFFFF）—— 取不到 token，
+         硬编码是有意的例外，**改幕布底色时这里要跟着改**。
+         它现在的职责不是「藏住内容」（内容与幕布同色，本来就看不见），
+         而是万一将来 `--bg` 不再纯白，也不会先闪一帧底色。
          选择器要压过 main.css 的 body 规则（0,1,1 > 0,0,1），与注入顺序无关。 */
       html.intro-boot,
       html.intro-boot body {
-        background: #0a0a0a;
+        background: #ffffff;
       }
     </style>
 
