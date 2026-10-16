@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 /**
- * M1 只交付首页。其余路由先落到 PlaceholderView，
+ * 已交付 M1 首页、M2 详情页。其余路由先落到 PlaceholderView，
  * 这样导航点得动、URL 结构一次定死，后续填实现不用改路由。
  */
 const routes: RouteRecordRaw[] = [
@@ -19,14 +19,15 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/car/:id',
     name: 'car',
-    component: () => import('@/views/PlaceholderView.vue'),
-    meta: { title: '车辆详情', milestone: 'M2' },
+    component: () => import('@/views/CarDetailView.vue'),
+    meta: { title: '车辆详情' },
   },
   {
     path: '/seckill/:id',
     name: 'seckill',
     component: () => import('@/views/PlaceholderView.vue'),
-    meta: { title: '限时特价', milestone: 'M2' },
+    // 抢购要写订单，依赖登录态 —— 和登录一起放进 M3，详见 docs/specs 的里程碑表
+    meta: { title: '限时特价', milestone: 'M3' },
   },
   {
     path: '/blog',
