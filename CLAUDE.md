@@ -1,7 +1,15 @@
 # hmdp-web — 二手车平台前端（作品集级动效）
 
-基于 `../hmdp-master`（完整版后端，分支 `usedcar`）的 Vue3 重写。把「本地生活点评」的
+基于 `../hmdp-master`（完整版后端，**原始 15 列的 `tb_shop`**）的 Vue3 重写。把「本地生活点评」的
 功能语义映射到「二手车交易」：一辆车只能卖给一个人，秒杀 + 一人一单在这里完全自洽。
+
+> **`usedcar` 分支不存在（2026-10-16 查实）。** README 与本文件曾写着「后端是 `hmdp-master` 的
+> `usedcar` 分支，它给商铺表加了车辆扩展字段」——实测两个后端仓库都没有这个分支，
+> 全仓库 grep `mileage|register_date|gearbox|fuel|displacement|owner_count` 零命中，
+> `tb_shop` 就是原始 DDL。
+> 后果：**`VITE_USE_MOCK=false` 这条路径今天必然算出残缺的 `Car`**（里程/变速箱/能源全是
+> `undefined`），接口签名是对的，缺的是数据。要跑真机得先在后端建这个分支并加列，
+> 那是后端的工作，前端不改契约也不伪造字段。
 
 ## 分支
 
@@ -117,19 +125,38 @@ main 塌成 0 高，footer 会跳到页首。
 不能写进任何组件的 `<style scoped>` —— `<Transition name="route">` 由 `App.vue` 直接渲染，
 没有 scoped 宿主，写进去匹配不到，表现为「转场静默失效」。
 
-### 6. 列表重新渲染必须换 key
+### 6. 滚动入场（`data-reveal`）的三条纪律
 
 `[data-reveal]` 元素的初始 `opacity: 0` 是 **`main.css` 的 CSS 规则**给的，不是内联样式 ——
-入场动画由 `useReveal` 在 `onMounted` 里跑一次，把 opacity 动画到 1。
+入场动画由 `useReveal` 把 opacity 补间到 1。于是有三条不能破的纪律：
 
-所以：**任何在挂载之后被换掉内容的列表，必须让宿主组件重新挂载**，否则新元素拿到
-CSS 给的 `opacity: 0`，背后却没有任何动画去揭开它们 —— 整个列表隐形，而且控制台一片安静。
+**① 每个渲染 `data-reveal` 的组件都必须自己调 `useReveal`。**
+
+缺了 JS 那一半，元素就是**永久隐形**的，而且几乎查不出来：不报错、DOM 里文字都在、
+`textContent` 取得到、`getBoundingClientRect()` 也量得出正常尺寸 —— 只有截图上是一片空白。
+更坑的是 `prefers-reduced-motion` 下 main.css 的兜底会把它设成 `opacity: 1`，
+**只测减弱动效永远发现不了**。
+
+2026-10-16 就这么漏过一次：`SpecTable.vue` / `VoucherCards.vue` 写了 `data-reveal`
+却没人调 `useReveal`，详情页整页只剩 hero 与页脚可见。现在由
+`src/composables/useReveal.spec.ts` 静态扫描所有 `.vue` 守着这条配对，别再绕过它。
+
+**② 一个 `data-reveal` 只能有一个宿主。** 谁渲染这块标记谁负责揭开它；
+两层同时 reveal 会在同一元素上叠两个补间 —— 不报错，但会抖。
+
+**③ 任何在挂载之后被换掉内容的列表，必须让宿主组件重新挂载。**
+
+否则新元素拿到 CSS 给的 `opacity: 0`，背后却没有任何动画去揭开它们 —— 整个列表隐形。
 
 现例：`HomeView` 切大类时 `<FeaturedCars :key="kind" :cars="cars" />`。两条纪律：
 
 - `:key` 要跟着**数据**变，不能跟着别的状态变
 - 换数据与换 key 必须在**同一个 tick** 里赋值（`cars.value = list` 后再 `kind.value = next`，
   中间不许 `await`）。先换 key 会让组件带着旧数据重挂一次，动画就作用在旧卡片上了
+
+> **内容异步到达时用 `useReveal` 的 `ready` 选项**：视图先挂载、数据后到的话，
+> `onMounted` 那一刻容器里一个 `[data-reveal]` 都没有，早退之后就再没人揭开了。
+> `CarDetailView` 给内联的「车源所在地」块传 `ready: loaded` 就是为这个。
 
 ## 目录
 
@@ -138,13 +165,15 @@ src/
 ├── api/          接口层，按后端模块分文件；client.ts 是 axios 实例
 ├── components/
 │   ├── ui/       通用组件：AppButton / AppTag / SkeletonBlock / StatCount
-│   └── business/ 业务组件：HeroSection / IntroCurtain / KindTabs / BrandNav / CarCard / FeaturedCars / ReviewFeed
-├── composables/  useCountUp / useReveal / useScrollTo
+│   └── business/ 业务组件：HeroSection / IntroCurtain / KindTabs / BrandNav / CarCard /
+│                 FeaturedCars / ReviewFeed / CarHero / SpecTable / VoucherCards / StickyBuyBar
+├── composables/  useCountUp / useReveal（+ useReveal.spec.ts 守 data-reveal 配对）/ useScrollTo
 ├── layouts/      SiteLayout（全站唯一布局，App.vue 用它包住 RouterView）
-├── lib/          gsap / lenis / intro 单例，fit.ts（车台面积归一公式）
+├── lib/          gsap / lenis / intro 单例，fit.ts（车台面积归一公式），
+│                 flip.ts（手写共享元素转场，细节见 specs §6.4），carName.ts（展示名口径）
 ├── router/
 ├── styles/       tokens.css（设计 token）+ main.css
-└── views/
+└── views/        HomeView / CarDetailView（M2）/ PlaceholderView（未交付路由的占位）
 
 public/cars/      车辆原图（jpg）+ 抠图产物（cut/*.webp）
 docs/             specs/ 设计文档、plans/ 实施计划、screenshots/ README 用图
@@ -168,7 +197,9 @@ docs/             specs/ 设计文档、plans/ 实施计划、screenshots/ READM
   找一张干净的实景照（Unsplash / Pexels 免费商用），抠图交给 `scripts/cutout-cars.py`。
 - 放 `public/cars/`，命名 `品牌-车型.jpg`（kebab-case），跑抠图生成 `public/cars/cut/*.webp`，
   再到 `src/api/mock.ts` 加条目。
-- 源图**长边 ≥ 2500px**：抠图产物封顶 1600px，首屏够用，但 M2 详情页 DPR2 下要 2880px。
+- 源图**长边 ≥ 2500px**：抠图产物封顶 1600px，首屏够用。
+  **详情页 hero 走原图不走抠图**（`object-cover`，3000–7680px 足够 DPR2），所以「提到 2800
+  重跑流水线」只在对抠图有需求时才做 —— 详见 specs §3.6 的补充说明，别照旧结论执行。
 - 选图比分辨率重要：正侧或轻微 3/4、**整车完整入画且四周留白**（贴边会被切）、
   背景干净、投影轻、画面里不要有人或第二台车（最大连通域会选错主体）。
 - 筛图用 `--check`，别等抠完才发现不能用：
