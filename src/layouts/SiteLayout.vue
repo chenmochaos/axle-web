@@ -18,13 +18,15 @@ const footerGroups = [
     title: '买车',
     links: [
       { label: '在售车源', to: '/cars' },
-      { label: '限时特价', to: '/seckill/1' },
+      // 这里原来有一条「限时特价 → /seckill/1」。删掉的理由：秒杀券是**按车**的
+      // （`GET /voucher/list/{shopId}`），没有任何接口能列出「全部特价」，
+      // 那个写死的 `1` 也不是任何一张真实券的 id。秒杀的入口就是车辆详情页。
     ],
   },
   {
     title: '社区',
     links: [
-      { label: '提车口碑', to: '/blog' },
+      { label: '口碑广场', to: '/blog' },
       { label: '关注动态', to: '/feed' },
     ],
   },
@@ -104,7 +106,7 @@ onUnmounted(() => ctx?.revert())
         <div>
           <p class="font-display text-[17px] font-medium tracking-[0.3em] text-fg">AXLE</p>
           <p class="mt-4 max-w-[28rem] text-[13px] leading-[1.8] text-pretty text-fg-muted">
-            一车一况，明码标价。每台车经过 176 项检测，随车附第三方检测报告。
+            一车一况，明码标价。车源参数、限时特价与购车券都在车辆详情页。
           </p>
         </div>
 
