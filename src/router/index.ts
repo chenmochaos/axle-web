@@ -69,8 +69,11 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  // 平滑滚动交给 Lenis，路由切换只需把位置归零
-  scrollBehavior: () => ({ top: 0 }),
+  // 这里**故意不写 scrollBehavior**。它走原生 window.scrollTo，有两个毛病：
+  // ① Lenis 内部记的 targetScroll 不会跟着变，下一帧会把页面拉回原处；
+  // ② 它在导航确认时就执行，而 <Transition mode="out-in"> 的离开动画还要跑 0.3s，
+  //    于是旧页会「一边淡出一边往上跳」。
+  // 滚动归零改由 App.vue 的 @after-leave 驱动 Lenis 完成，见那里的注释。
 })
 
 router.afterEach((to) => {

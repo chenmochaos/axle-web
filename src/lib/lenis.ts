@@ -37,10 +37,3 @@ gsap.ticker.add((time) => {
 })
 
 gsap.ticker.lagSmoothing(0)
-
-/** 组件卸载时统一清理 ScrollTrigger，避免路由切换后残留实例 */
-export function cleanupScrollTriggers() {
-  ScrollTrigger.getAll().forEach((t) => t.kill())
-}
-
-export { ScrollTrigger }

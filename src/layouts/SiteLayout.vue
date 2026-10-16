@@ -91,7 +91,9 @@ onUnmounted(() => ctx?.revert())
       </div>
     </header>
 
-    <main>
+    <!-- min-h-[100svh]：`out-in` 转场期间旧内容先卸载，main 高度会瞬间塌到 0，
+         footer 于是跳到页首。根节点只有 min-h-screen，拦不住这一幕 —— 高度要在这里撑住。 -->
+    <main class="min-h-[100svh]">
       <slot />
     </main>
 

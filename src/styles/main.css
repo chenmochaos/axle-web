@@ -68,6 +68,36 @@ html.lenis body {
   overflow: hidden;
 }
 
+/* ── 路由转场 ─────────────────────────────────────────────────
+   放在全局而不是某个组件的 scoped 里：<Transition name="route"> 由 App.vue 直接渲染，
+   没有 scoped 宿主，写进组件的 scoped 根本匹配不到。
+
+   时长刻意不对称：离开 0.3s 比进入 0.5s 快 —— 离场是「让位」，入场是「登场」，
+   等长会让整段读起来像一次生硬的替换。配合 out-in，总时长约 0.8s。
+
+   减弱动效由下面那段 prefers-reduced-motion 统一压到 0.01ms，这里不用另写。 */
+.route-leave-active {
+  transition:
+    opacity 0.3s var(--ease-cinematic),
+    transform 0.3s var(--ease-cinematic);
+}
+
+.route-enter-active {
+  transition:
+    opacity 0.5s var(--ease-cinematic),
+    transform 0.5s var(--ease-cinematic);
+}
+
+.route-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.route-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
 /* ── 滚动条：保持零彩色 ─────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 10px;

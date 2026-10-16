@@ -7,11 +7,44 @@
     <meta name="description" content="一车一况，明码标价。精选二手车源与限时特价。" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- 开场幕布的「防白闪」：条件判断只写在这里，src/lib/intro.ts 读的就是这个 class。
+         必须内联、必须早于 bundle、也必须早于下面那条字体样式表 ——
+         浏览器会阻塞普通 <script> 直到前面的样式表就绪（脚本可能查询样式），
+         字体 CDN 慢的时候这段判断就会跟着被推迟。放这里它只依赖 preconnect。
+         判断条件（三条全中才放幕布）：首页 + 本次会话首次 + 用户没要求减弱动效。 -->
+    <script>
+      ;(function () {
+        try {
+          if (location.pathname !== '/') return
+          if (sessionStorage.getItem('axle:intro') === '1') return
+          if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+          document.documentElement.classList.add('intro-boot')
+          // 兜底：bundle 加载失败时没人来撤这块黑，5 秒后自己撤掉。
+          // 正常路径下幕布挂载时（约 2.2s 前）已经撤过，这里是空操作。
+          setTimeout(function () {
+            document.documentElement.classList.remove('intro-boot')
+          }, 5000)
+        } catch (e) {
+          /* 隐私模式下 sessionStorage 会抛 —— 直接跳过开场，别把页面留在黑屏 */
+        }
+      })()
+    </script>
+    <style>
+      /* 只能内联：main.css 随 bundle 加载，等它到了白底已经闪过了。
+         色值 = --color-ink-950，这里取不到 token，硬编码是有意的例外。
+         选择器要压过 main.css 的 body 规则（0,1,1 > 0,0,1），与注入顺序无关。 */
+      html.intro-boot,
+      html.intro-boot body {
+        background: #0a0a0a;
+      }
+    </style>
+
     <!-- Inter 覆盖正文与数字，Oswald 是全大写展示体（首屏主标题/车名/字标）；
          两者都只有拉丁字形，中文回落本机 Noto Sans CJK。
          display=swap 保证字体没到也不阻塞首屏渲染。 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@400;500;600&display=swap"
