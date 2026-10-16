@@ -25,7 +25,10 @@ export type KindFilter = 'all' | VehicleKind
  * 车辆。字段是 `tb_shop` 到二手车的语义映射：
  * `shop.name` → 车款名，`shop.avgPrice` → 售价，`shop.score` → 车况评分。
  *
- * 带 `?` 的是后端改造（分支 usedcar）新增的列，未上线前由 mock 补齐。
+ * 带 `?` 的是**计划中的后端改造**（`usedcar` 分支）要新增的列 —— 该分支尚未创建
+ * （2026-10-16 查实，见 CLAUDE.md 顶部），所以今天只有 mock 路径能填满它们。
+ * 真机路径只能映射 `tb_shop` 现有的 15 列，其余字段是 `undefined`。
+ * 契约先把字段占住是对的（后端上线后前端不用改），但别把它当成「已经有了」。
  */
 export interface Car {
   id: number
@@ -34,8 +37,8 @@ export interface Car {
   /** 品牌，用于导航与筛选 */
   brand: string
   /**
-   * 车辆大类。**缺省视作汽车** —— 后端 `usedcar` 分支加这一列之前的老数据没有它，
-   * 而那时池子里也只有汽车。判断一律走 `kindOf()`，不要在调用点各写一遍 `?? 'car'`。
+   * 车辆大类。**缺省视作汽车** —— 真机路径现在没有这一列（`usedcar` 分支未建），
+   * 而原始池子里也只有汽车。判断一律走 `kindOf()`，不要在调用点各写一遍 `?? 'car'`。
    */
   kind?: VehicleKind
   /** 售价（元） */
@@ -69,6 +72,40 @@ export interface Car {
   sold: number
   /** GEO 距离（km），仅在传了坐标时后端返回 */
   distance?: number
+}
+
+/**
+ * 购车券，映射 `tb_voucher`（+ `tb_seckill_voucher`）。挂在车上（`shopId` = 车 id），
+ * 详情页的「限时特价」区块就是它。
+ *
+ * **两种券在同一张表里，靠 `type` 分：**
+ *
+ * - `type = 0` 普通券 —— 只有 `tb_voucher` 那一行，`stock` / `beginTime` / `endTime`
+ *   是 `Voucher` 实体上的 `@TableField(exist = false)` 瞬态字段，**左连接没命中就是 null**。
+ *   所以这三个字段必须是可空的：把它们当成必定存在会在详情页上渲染出 `NaN` 或 `undefined`。
+ * - `type = 1` 秒杀券 —— 有 `tb_seckill_voucher` 那一行，三个字段齐全，可抢。
+ *
+ * `payValue` / `actualValue` 单位是**分**（后端 `Long`），不是元。显示要除 100。
+ */
+export interface Voucher {
+  id: number
+  /** 所属车 id —— 语义上是「这台车」，不是「这家店」 */
+  shopId: number
+  title: string
+  subTitle?: string | null
+  /** 使用规则，多行用 `\n` 分隔 */
+  rules?: string | null
+  /** 支付金额（分） */
+  payValue: number
+  /** 抵扣金额（分） */
+  actualValue: number
+  /** 0 = 普通券，1 = 秒杀券 */
+  type: number
+  status?: number
+  /** 以下三个仅 `type = 1` 有值 */
+  stock?: number | null
+  beginTime?: string | null
+  endTime?: string | null
 }
 
 export interface Brand {

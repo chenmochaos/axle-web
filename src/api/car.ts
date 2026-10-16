@@ -1,10 +1,11 @@
 import { get, getPage } from './client'
-import { mockBrands, mockCars, mockReviews } from './mock'
-import type { Brand, Car, Page, Review, VehicleKind } from './types'
+import { mockBrands, mockCars, mockReviews, mockVouchers } from './mock'
+import type { Brand, Car, Page, Review, VehicleKind, Voucher } from './types'
 
 /**
- * 后端 `tb_shop` 的车辆扩展字段（mileage/registerDate/…）还没上线，
- * 默认走 mock。后端数据就绪后在 `.env.local` 里设 `VITE_USE_MOCK=false`。
+ * 后端 `tb_shop` 的车辆扩展字段（mileage/registerDate/…）**计划中**要加，
+ * 但 `usedcar` 分支尚未创建（2026-10-16 查实，见 CLAUDE.md 顶部）——
+ * 所以今天默认走 mock。真机路径能连、能返回，只是 `Car` 会缺一半字段。
  */
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
 
@@ -14,9 +15,8 @@ function delay<T>(value: T, ms = 260): Promise<T> {
 }
 
 /**
- * 车辆大类，缺省视作汽车（后端 `usedcar` 分支加这一列之前的老数据没有它，
- * 而那时池子里只有汽车）。判断一律走这里，不要在各调用点自己写 `?? 'car'` ——
- * 缺省口径只该有一个出处。
+ * 车辆大类，缺省视作汽车（真机路径现在没有这一列，原始池子里只有汽车）。
+ * 判断一律走这里，不要在各调用点自己写 `?? 'car'` —— 缺省口径只该有一个出处。
  */
 export function kindOf(car: Car): VehicleKind {
   return car.kind ?? 'car'
@@ -45,8 +45,9 @@ export async function fetchBrands(): Promise<Brand[]> {
  * GET /shop/of/type —— 车源列表。
  * 传 x/y 时后端走 Redis GEO 距离排序，不传是普通分页。
  *
- * `kind` 目前只有 mock 路径真的在筛；真机路径照发是因为后端 `usedcar` 分支要按它加
+ * `kind` 目前只有 mock 路径真的在筛；真机路径照发是因为计划中的 `usedcar` 分支要按它加
  * where 条件，前端先把参数这个口径占住，后端上线后不用再改前端。
+ * 在那之前真机路径传了 `kind` 也不会被后端理解 —— 这是已知的、有意的空转。
  */
 export async function fetchCarsByBrand(params: {
   typeId?: number
@@ -127,6 +128,68 @@ export async function fetchHeroCars(): Promise<Car[]> {
 export async function fetchCarDetail(id: number): Promise<Car | undefined> {
   if (USE_MOCK) return delay(mockCars.find((c) => c.id === id))
   return get<Car>(`/shop/${id}`)
+}
+
+/**
+ * GET /voucher/list/{shopId} —— 该车的购车券。`shopId` 在二手车语义下就是**车 id**
+ * （一辆车只卖给一个人，车即「店」）。
+ *
+ * 响应里 `type = 0` 与 `type = 1` **混在一起**（后端是一条 LEFT JOIN），
+ * 普通券的 `stock` / `beginTime` / `endTime` 是 `null`。调用方要按 `type` 分支，
+ * 别假设这三兄弟总在。
+ */
+export async function fetchVouchersOfShop(shopId: number): Promise<Voucher[]> {
+  if (USE_MOCK) return delay(mockVouchers.filter((v) => v.shopId === shopId))
+  return get<Voucher[]>(`/voucher/list/${shopId}`)
+}
+
+/**
+ * 秒杀券此刻是否在售期内。
+ *
+ * 后端在抢购时用同一条判据拒绝请求（"秒杀尚未开始" / "秒杀已经结束"），
+ * 前端镜像它是为了**不给出一个点下去必然失败的按钮** —— 后端仍然会拦，这里只是不让 UI 骗人。
+ *
+ * 判据缺失时**放行**（返回 true）：`type = 1` 本来就该有这两个字段，缺了说明数据不完整，
+ * 此时宁可显示按钮让后端去拒绝，也好过把一个真实的在售秒杀藏起来。
+ *
+ * `now` 可注入，纯函数才好测。
+ */
+export function isSeckillLive(v: Voucher, now: number = Date.now()): boolean {
+  if (v.type !== 1) return false
+  if (v.beginTime && now < Date.parse(v.beginTime)) return false
+  if (v.endTime && now > Date.parse(v.endTime)) return false
+  return true
+}
+
+/**
+ * 相似车源的挑选口径 —— **mock 与真机共用这一个**。
+ *
+ * 两处各写一份必然漂移，而漂移的表现是「同一台车在两种数据源下推荐出不同的车」，
+ * 排查起来要先把两段逻辑对照着读一遍。抽成纯函数另一个好处是能单测（见 car.spec.ts）。
+ *
+ * 排序：**同品牌优先，其次同大类**，最后按 `pool` 原序补齐。不随机 ——
+ * 每次进详情页推荐都在变，看起来像推荐坏了。
+ */
+export function pickSimilar(pool: Car[], car: Car, limit = 3): Car[] {
+  const others = pool.filter((c) => c.id !== car.id)
+  const sameBrand = others.filter((c) => c.brand === car.brand)
+  const sameKind = others.filter((c) => kindOf(c) === kindOf(car))
+
+  // Set 去重：同品牌且同大类的车会同时命中前两组
+  return [...new Set([...sameBrand, ...sameKind])].slice(0, limit)
+}
+
+/**
+ * 相似车源。后端**没有**推荐接口，真机路径是拿列表接口的一页在本地挑 ——
+ * 是「同一张表的相邻车源」，不是个性化推荐。名字叫 similar 但别读成「智能推荐」。
+ *
+ * 同品牌的排在前面，所以结果通常和当前车同类，看起来是合理的。
+ */
+export async function fetchSimilarCars(car: Car, limit = 3): Promise<Car[]> {
+  if (USE_MOCK) return delay(pickSimilar(mockCars, car, limit))
+
+  const page = await fetchCarsByBrand({ current: 1, kind: kindOf(car) })
+  return pickSimilar(page.list, car, limit)
 }
 
 /** GET /blog/hot —— 热门口碑 */

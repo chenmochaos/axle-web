@@ -1,17 +1,20 @@
-import type { Brand, Car, Review } from './types'
+import type { Brand, Car, Review, Voucher } from './types'
 
 /**
- * M1 阶段的种子数据。
+ * 种子数据。
  *
- * 为什么不直接连后端：`tb_shop` 现在装的是美食店铺，扩字段（里程/上牌/变速箱…）
- * 是后端 `usedcar` 分支的并行工作。这里先给真实形状的数据把界面钉死，
- * 等后端数据就绪把 `VITE_USE_MOCK` 设成 false 即可，接口签名不用动。
+ * 为什么不直接连后端：`tb_shop` 装的是店铺、也没有车辆扩展字段
+ * （`usedcar` 分支尚未创建，2026-10-16 查实，见 CLAUDE.md 顶部）。
+ * 这里先给真实形状的数据把界面钉死，等后端数据就绪把 `VITE_USE_MOCK` 设成 false 即可，
+ * 接口签名不用动 —— **但真机路径今天会缺字段**，那是后端的工作。
  *
- * **两条素材纪律**（照片是演示素材，但映射到字段上的事实不该是编的）：
+ * **三条素材纪律**（照片是演示素材，但映射到字段上的事实不该是编的）：
  *
- * 1. `images[0]` 必须指向 `public/cars/` 下**真实存在**的文件。指向已删文件的卡片
- *    会静默渲染成一块空图 —— 换素材时这里是要跟着改的，不是「反正 mock 无所谓」。
- * 2. `cutout` **只在抠图产物干净可用时给**，因为它唯一的下游是首屏（`HeroSection` 用
+ * 1. `images[i]` **每一个**都必须指向 `public/cars/` 下真实存在的文件。指向已删文件的
+ *    卡片会静默渲染成一块空图 —— 换素材时这里是要跟着改的，不是「反正 mock 无所谓」。
+ * 2. `images` 有多张就是**真图集**，不是凑数：详情页的缩略图条靠它。没有真实的多角度素材
+ *    就只放一张，详情页自然不渲染缩略图条 —— 不拿同一张图重复凑成「多图」。
+ * 3. `cutout` **只在抠图产物干净可用时给**，因为它唯一的下游是首屏（`HeroSection` 用
  *    `cutout ?? images[0]`，卡片一律用原图）—— 也就是说这个字段的实际语义是
  *    「这台车能上首屏」。脏抠图留在这里等于在数据里说谎，宁可缺。怎么算干净见 car.ts
  *    的 `HERO_CAR_IDS`。2026-10-16 按这条撤掉了 5 台的 `cutout`。
@@ -69,7 +72,9 @@ export const mockCars: Car[] = [
     kind: 'car',
     price: 238_000,
     originalPrice: 339_000,
-    images: ['/cars/mazda-mx5.jpeg'],
+    // 两张是**真的两个角度**：同一次拍摄、同一台车（同轮毂、同尾翼、同侧标、
+    // 同背景的白楼与草坪），一张前 3/4 一张侧身。详情页的缩略图条就靠它。
+    images: ['/cars/mazda-mx5.jpeg', '/cars/mx5(1).jpeg'],
     cutout: '/cars/cut/mazda-mx5.webp',
     mileage: 1.8,
     registerDate: '2020-05',
@@ -285,6 +290,97 @@ export const mockCars: Car[] = [
     score: 4.5,
     sold: 174,
     distance: 31.6,
+  },
+]
+
+/* ── 购车券（`tb_voucher` + `tb_seckill_voucher`）──────────────────────────
+ *
+ * 对应后端 `GET /voucher/list/{shopId}`，它是一条 **LEFT JOIN**：普通券（`type = 0`）
+ * 在 `tb_seckill_voucher` 里没有行，`stock` / `beginTime` / `endTime` 就是 `null`。
+ * 所以下面的 `type = 0` 条目**刻意不写这三个字段** —— 写成 0 或空串是在教前端
+ * 「它们总是有值」，然后详情页上就会渲染出 `NaN`。
+ *
+ * **秒杀的时间窗必须是算出来的，不能硬编码。** 后端在抢购时校验
+ * 「当前时间要在 beginTime–endTime 之间」，过期的秒杀在前端会被 `isSeckillLive()`
+ * 拦掉。硬编码一个 ISO 日期看着更像真数据，但它会过期 —— 而过期的表现是
+ * 「限时特价区块和抢购条静默消失」，不报错、不警告，下次打开就没了。
+ * 这里是 mock，永远在售是对的。
+ *
+ * 时间串用 `YYYY-MM-DDTHH:mm:ss`（不带 `Z`）：Jackson 对 `LocalDateTime` 就是这么序列化的，
+ * 带 `Z` 会被 JS 当成 UTC 解析，与后端的本地时间语义差一个时区。
+ */
+const DAY_MS = 86_400_000
+const mockNow = Date.now()
+
+/** 本地时间的 `YYYY-MM-DDTHH:mm:ss`。**不能用 `toISOString()`** —— 那是 UTC，
+ *  截掉 `Z` 之后 JS 又会按本地时间解析回来，一来一回差一个时区偏移。 */
+const localIso = (t: number) => {
+  const d = new Date(t)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  )
+}
+
+export const mockVouchers: Voucher[] = [
+  // 车 5：一张秒杀券（详情页因此出现底部抢购条）+ 一张普通券
+  {
+    id: 101,
+    shopId: 5,
+    title: '限时特价 · 意向金抵 1 万',
+    subTitle: '本周限量 50 张，到店核销',
+    rules: '到店核销\n可无条件退\n每人限购 1 张\n不与门店其他优惠叠加',
+    payValue: 9_900,
+    actualValue: 1_000_000,
+    type: 1,
+    status: 1,
+    stock: 50,
+    beginTime: localIso(mockNow - 3 * DAY_MS),
+    endTime: localIso(mockNow + 7 * DAY_MS),
+  },
+  {
+    id: 102,
+    shopId: 5,
+    // 普通券：没有 stock / beginTime / endTime
+    title: '免费全车检测券',
+    subTitle: '含漆膜仪与举升机检测',
+    rules: '需提前 1 天预约\n单次到店有效',
+    payValue: 0,
+    actualValue: 68_000,
+    type: 0,
+    status: 1,
+  },
+
+  // 车 12：另一张秒杀券 —— 首屏第二台，验证抢购条不是只对某一台生效
+  {
+    id: 103,
+    shopId: 12,
+    title: '限时特价 · 骑行装备金抵 5000',
+    subTitle: '限量 200 张',
+    rules: '到店核销\n可无条件退\n每人限购 1 张',
+    payValue: 5_000,
+    actualValue: 500_000,
+    type: 1,
+    status: 1,
+    stock: 200,
+    beginTime: localIso(mockNow - DAY_MS),
+    endTime: localIso(mockNow + 14 * DAY_MS),
+  },
+
+  // 车 10：**只有普通券**，没有秒杀 —— 详情页应当渲染券区块但**不出抢购条**。
+  // 这一条是为「有券但不该出抢购条」这个分支留的：两三种状态各要有一台真车兜住，
+  // 否则那个 `v-if` 分支从没被人眼看过。
+  {
+    id: 104,
+    shopId: 10,
+    title: '首年延保抵扣券',
+    subTitle: '抵 3000 元延保费用',
+    rules: '随车购买延保时抵扣\n不可折现',
+    payValue: 19_900,
+    actualValue: 300_000,
+    type: 0,
+    status: 1,
   },
 ]
 
