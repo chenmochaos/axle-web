@@ -96,9 +96,9 @@ mvn spring-boot:run              # 8081
 ```
 
 **`init-car-cache.sh` 是必须的，而且必须放在详情页验收之前。**
-`ShopServiceImpl`（现 `CarServiceImpl`）的 `queryById` 走
+`CarServiceImpl` 的 `queryById` 走
 `CacheClient.queryWithLogicalExpire`，它的语义是**缓存没命中就直接返回 null、不回查数据库**
-（假设已被预热）。所以冷缓存下 `GET /car/{id}` 会回「店铺不存在」，而车明明在 MySQL 里。
+（假设已被预热）。所以冷缓存下 `GET /car/{id}` 会回「车源不存在」，而车明明在 MySQL 里。
 `init-car-cache.sh` 自己就是「先清空再重建」，**不要再单独 `del` 一次**。
 预热一次即可 —— 值的 `expireTime` 到点后下一次读会拿互斥锁异步回源，之后自维持。
 

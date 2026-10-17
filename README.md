@@ -77,7 +77,7 @@ pnpm dev                             # http://localhost:5173，默认走内置 m
 VITE_USE_MOCK=false pnpm dev --port 5174
 ```
 
-> ⚠️ 真机模式下 `GET /car/{id}` 走「逻辑过期」缓存，**冷缓存会直接返回「店铺不存在」且不回查数据库**。
+> ⚠️ 真机模式下 `GET /car/{id}` 走「逻辑过期」缓存，**冷缓存会直接返回「车源不存在」且不回查数据库**。
 > 清过缓存后必须重跑 `server/scripts/init-car-cache.sh`，否则列表正常、详情页全挂。
 
 ### 一条命令跑全套（可选）

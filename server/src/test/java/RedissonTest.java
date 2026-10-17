@@ -1,4 +1,4 @@
-import com.hmdp.HmDianPingApplication;
+import com.axle.AxleApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,7 +10,7 @@ import javax.annotation.Resource;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@SpringBootTest(classes = HmDianPingApplication.class)
+@SpringBootTest(classes = AxleApplication.class)
 public class RedissonTest {
     @Resource
     private RedissonClient redissonClient;

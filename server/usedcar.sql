@@ -2,7 +2,7 @@
 -- usedcar.sql —— 把 hmdp 的「本地生活点评」数据就地改造成「二手车平台」数据
 -- ============================================================================
 --
--- 为什么改的是数据而不是建新库：前端（hmdp-web）是**复用** hmdp 的接口契约的，
+-- 为什么改的是数据而不是建新库：前端（web/）是**复用** hmdp 的接口契约的，
 -- 表名、列名、响应结构一律不变，只把语义从「商铺」换成「车源」、从「餐饮品类」
 -- 换成「品牌」。契约不变是这个项目的既定原则，所以这里不新建表、不建新库。
 --
@@ -14,7 +14,7 @@
 --
 -- 运行（**必须用 mysql 命令行客户端**，脚本里用了 `DELIMITER`，GUI 工具会解析失败）：
 --
---   cd hmdp-master
+--   cd server
 --   set -a && . ./.env && set +a          # 取 MYSQL_PASSWORD
 --   mysql -udev -p"$MYSQL_PASSWORD" hmdp < usedcar.sql
 --
@@ -126,7 +126,7 @@ ON DUPLICATE KEY UPDATE
 --     （`ShopServiceImpl.java` 的 `new Distance(5000)`），原先 14 台散在 8 个城市、
 --     很多城市只有 1 台 —— 「附近优先」在任何城市都只能查出 1 台，看起来像坏了。
 --     集中之后同城 4–5 台相互都在半径内，这个开关才演示得出来。
---     **改了这里就必须同步改 `hmdp-web/src/api/mock.ts` 的 `mockCarCoords`**，
+--     **改了这里就必须同步改 `web/src/api/mock.ts` 的 `mockCarCoords`**，
 --     否则 mock 与真机的「附近」结果对不上（`car.ts` 的 `nearbyCars` 用同一套半径现算距离）。
 --   * `cutout`（首屏抠图）**没有列，也不该有**：那是前端 `public/cars/cut/` 的
 --     命名约定，由适配层的 `cutoutOf()` 推导，不是后端数据。
@@ -135,7 +135,7 @@ INSERT INTO tb_shop
   (id, name, type_id, images, area, address, x, y, avg_price, sold, comments, score, open_hours,
    mileage, register_date, gearbox, fuel, displacement, owner_count, kind, original_price)
 VALUES
-  -- ── id 1–13：逐字段对齐 hmdp-web/src/api/mock.ts 的 mockCars ──────────────
+  -- ── id 1–13：逐字段对齐 web/src/api/mock.ts 的 mockCars ──────────────
   (1,  'Manhart MH4 GTR II', 1, '/cars/manhart-mh4-gtr-ii.jpg', NULL,
    '上海市黄浦区人民大道 200 号', 121.4737, 31.2304,
    188000000, 1286, 321, 49, NULL, 0.6, '2022-05', '自动', '汽油', '3.0T', 0, 'car', 218000000),

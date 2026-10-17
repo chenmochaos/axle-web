@@ -2,7 +2,7 @@ server:
   port: 8081
 spring:
   application:
-    name: hmdp
+    name: axle-server
   config:
     # 读取项目根目录的 .env（本地密钥，指向主工作区的同一份，已在 .gitignore 中忽略）
     import: optional:file:.env[.properties]
@@ -25,7 +25,7 @@ spring:
   jackson:
     default-property-inclusion: non_null # JSON处理时忽略非空字段
 mybatis-plus:
-  type-aliases-package: com.hmdp.entity # 别名扫描包
+  type-aliases-package: com.axle.entity # 别名扫描包
 logging:
   level:
-    com.hmdp: debug
+    com.axle: debug

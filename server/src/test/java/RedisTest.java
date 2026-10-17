@@ -3,13 +3,13 @@ import cn.hutool.json.JSONUtil;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hmdp.HmDianPingApplication;
-import com.hmdp.entity.Shop;
-import com.hmdp.entity.Voucher;
-import com.hmdp.service.impl.ShopServiceImpl;
-import com.hmdp.utils.CacheClient;
-import com.hmdp.utils.RedisConstants;
-import com.hmdp.utils.RedisIdWorker;
+import com.axle.AxleApplication;
+import com.axle.entity.Car;
+import com.axle.entity.Voucher;
+import com.axle.service.impl.CarServiceImpl;
+import com.axle.utils.CacheClient;
+import com.axle.utils.RedisConstants;
+import com.axle.utils.RedisIdWorker;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,25 +31,25 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static com.hmdp.utils.RedisConstants.*;
+import static com.axle.utils.RedisConstants.*;
 
-@SpringBootTest(classes = HmDianPingApplication.class)
+@SpringBootTest(classes = AxleApplication.class)
 public class RedisTest {
     @Resource
     private CacheClient cacheClient;
     @Resource
-    private ShopServiceImpl shopService;
+    private CarServiceImpl carService;
     @Resource
     private RedisIdWorker redisIdWorker;
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
     @Test
-    public void testSaveShop() throws InterruptedException {
+    public void testSaveCar() throws InterruptedException {
         //预热
-        List<Shop> shopList = shopService.list();
-        for (Shop shop : shopList) {
-            cacheClient.setWithLogicalExpire(CACHE_SHOP_KEY + shop.getId(), shop, 30L, TimeUnit.MINUTES);
+        List<Car> carList = carService.list();
+        for (Car car : carList) {
+            cacheClient.setWithLogicalExpire(CACHE_CAR_KEY + car.getId(), car, 30L, TimeUnit.MINUTES);
         }
     }
 
@@ -75,30 +75,30 @@ public class RedisTest {
     }
 
     @Test
-    public void testLoadShopData() {
+    public void testLoadCarData() {
         //查询店铺信息
-        List<Shop> list = shopService.list();
+        List<Car> list = carService.list();
         //分组
-        Map<Long, List<Shop>> map = list.stream().collect(Collectors.groupingBy(Shop::getTypeId));
+        Map<Long, List<Car>> map = list.stream().collect(Collectors.groupingBy(Car::getTypeId));
         //分批写入
-        for (Map.Entry<Long, List<Shop>> longListEntry : map.entrySet()) {
+        for (Map.Entry<Long, List<Car>> longListEntry : map.entrySet()) {
             //获取类型id
             Long typeId = longListEntry.getKey();
             //获取店铺集合
-            List<Shop> value = longListEntry.getValue();
+            List<Car> value = longListEntry.getValue();
             List<RedisGeoCommands.GeoLocation<String>> locations=new ArrayList<>(value.size());
             //写入redis
-            String key = SHOP_GEO_KEY + typeId;
-            /*for (Shop shop : value) {
-                Double x = shop.getX();
-                Double y = shop.getY();
+            String key = CAR_GEO_KEY + typeId;
+            /*for (Car car : value) {
+                Double x = car.getX();
+                Double y = car.getY();
                 stringRedisTemplate.opsForGeo()
                         .add(key
                                 , new Point(x, y)
-                                , shop.getId().toString());
+                                , car.getId().toString());
             }*/
-            for (Shop shop : value) {
-                locations.add(new RedisGeoCommands.GeoLocation<>(shop.getId().toString(),new Point(shop.getX(),shop.getY())));
+            for (Car car : value) {
+                locations.add(new RedisGeoCommands.GeoLocation<>(car.getId().toString(),new Point(car.getX(),car.getY())));
             }
             stringRedisTemplate.opsForGeo().add(key,locations);
         }
