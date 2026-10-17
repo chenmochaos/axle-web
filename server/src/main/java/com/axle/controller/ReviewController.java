@@ -1,19 +1,12 @@
 package com.axle.controller;
 
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.axle.dto.Result;
-import com.axle.dto.UserDTO;
 import com.axle.entity.Review;
-import com.axle.entity.User;
 import com.axle.service.IReviewService;
-import com.axle.service.IUserService;
-import com.axle.utils.SystemConstants;
-import com.axle.utils.UserHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import java.util.List;
 
 /**
  * <p>
@@ -43,14 +36,7 @@ public class ReviewController {
 
     @GetMapping("/of/me")
     public Result queryMyReview(@RequestParam(value = "current", defaultValue = "1") Integer current) {
-        // 获取登录用户
-        UserDTO user = UserHolder.getUser();
-        // 根据用户查询
-        Page<Review> page = reviewService.query()
-                .eq("user_id", user.getId()).page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
-        // 获取当前页数据
-        List<Review> records = page.getRecords();
-        return Result.ok(records);
+        return reviewService.queryMyReview(current);
     }
 
     @GetMapping("/hot")
@@ -70,11 +56,7 @@ public class ReviewController {
     @GetMapping("/of/user")
     public Result queryReviewByUserId(@RequestParam(value = "current",defaultValue = "1")Integer current,
                                     @RequestParam("id")Long id){
-        Page<Review> page = reviewService.query().eq("user_id", id)
-                .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
-
-        List<Review> records = page.getRecords();
-        return Result.ok(records);
+        return reviewService.queryReviewOfUser(current, id);
     }
     @GetMapping("/of/follow")
     public Result queryReviewOfFollow(@RequestParam("lastId")Long max,@RequestParam(value = "offset",defaultValue = "0")Integer offset){

@@ -363,7 +363,7 @@ const mockNow = Date.now()
 
 /** 本地时间的 `YYYY-MM-DDTHH:mm:ss`。**不能用 `toISOString()`** —— 那是 UTC，
  *  截掉 `Z` 之后 JS 又会按本地时间解析回来，一来一回差一个时区偏移。 */
-const localIso = (t: number) => {
+export const localIso = (t: number) => {
   const d = new Date(t)
   const p = (n: number) => String(n).padStart(2, '0')
   return (
@@ -465,6 +465,10 @@ export const mockVouchers: Voucher[] = [
  * `icon` 给空串而不是编一个 URL：真机上后端没设头像时给的就是空串，
  * 界面必须自己兜住这个分支（首字母兜底），mock 给一张假图会把这条分支盖掉。
  */
+/** mock 登录态的 token 前缀。真机路径由后端随机 token 取代；`mockSocial` 与 `user.ts`
+ *  都要用它判断「这个会话里有没有人登录」，所以放在这里当唯一出处。 */
+export const MOCK_TOKEN_PREFIX = 'mock-token-'
+
 export const mockUser = {
   id: 1,
   nickName: '阿澈',
@@ -491,78 +495,92 @@ export const mockBrands: Brand[] = [
 export const mockReviews: Review[] = [
   {
     id: 1,
+    carId: 1,
     title: '提车 Manhart MH4 GTR II，从验车到过户的全过程',
     content:
       '看了三台车，最后选了这台 2022 款。第三方检测报告显示原版原漆，四轮定位数据正常。分享几个验车要点：漆膜仪打一圈、冷车启动听声音、查保养记录和出险记录。',
     images: ['/cars/manhart-mh4-gtr-ii.jpg'],
     liked: 1284,
     comments: 96,
+    isLiked: false,
     createTime: '2026-10-12T14:20:00',
     author: { id: 11, nickName: '老陈说车', icon: '' },
   },
   {
     id: 2,
+    carId: 7,
     title: 'AMG GT Black Series 半年用车报告',
     content:
       '赛道日和日常通勤都跑过。悬挂在舒适模式下比想象中好，但离地间隙确实是硬伤，地库要挑。油耗市区 18L 左右，赛道日另算。',
     images: ['/cars/amg-gt-black-series.jpg'],
     liked: 892,
     comments: 143,
+    isLiked: false,
     createTime: '2026-10-10T09:05:00',
     author: { id: 12, nickName: 'Track Day', icon: '' },
   },
   {
     id: 3,
+    carId: 6,
     title: 'M4 CSL 第一次下赛道：轻量化到底轻在哪',
     content:
       '拆掉后排和隔音之后，车尾的动态比 Competition 干净得多。钛合金排气在 4000 转以上才开始有声音。附上原厂减重清单和各部件实测重量。',
     images: ['/cars/bmw-m4-csl.jpeg'],
     liked: 2056,
     comments: 218,
+    isLiked: false,
     createTime: '2026-10-08T20:41:00',
     author: { id: 13, nickName: '弯道快才是真的快', icon: '' },
   },
   {
     id: 4,
+    carId: 9,
     title: 'Model S Plaid 两年四万公里，电池衰减实测',
     content:
       '满电续航从提车时的 637km 掉到现在 601km，衰减 5.6%。日常家充为主，快充占比不到两成。附上完整的充电记录表。',
     images: ['/cars/model-s-2.jpg'],
     liked: 1447,
     comments: 187,
+    isLiked: false,
     createTime: '2026-10-04T16:12:00',
     author: { id: 14, nickName: '电量焦虑患者', icon: '' },
   },
   {
     id: 5,
+    carId: 2,
     title: 'S 1000 RR 提车第一周：从仿赛新手到跑完一趟山路',
     content:
       '电控给得很足，弯道 ABS 和防翘头在第一天就救了我两次。提醒同样从零开始的朋友：先练习低速绕桩，别急着上大排量的油。',
     images: ['/cars/bmw-s-1000-rr.jpg'],
     liked: 934,
     comments: 121,
+    isLiked: false,
     createTime: '2026-10-02T08:55:00',
     author: { id: 15, nickName: '两个轮子', icon: '' },
   },
   {
     id: 6,
+    carId: 4,
     title: '春风 675SR 三千公里长测：国产三缸值不值',
     content:
       '三缸的声浪和双缸完全两回事，中段扭矩很饱满。首保的时候发现链条略松，其余没毛病。这个价位能给到的配置单，进口车做不到。',
     images: ['/cars/cfmoto-675sr.jpeg'],
     liked: 1673,
     comments: 254,
+    isLiked: false,
     createTime: '2026-09-30T19:12:00',
     author: { id: 16, nickName: '摩托范儿', icon: '' },
   },
   {
     id: 7,
+    carId: 3,
     title: '验车报告：一台「原版原漆」的 GT 63 S 是怎么被识破的',
     content:
       '漆膜仪在右后翼子板读到 320μm，明显高于原厂 110μm。举升机下看到纵梁有轻微校正痕迹，卖家最终承认有过剐蹭。',
     images: ['/cars/amg-gt-63s.jpg'],
     liked: 3128,
     comments: 402,
+    isLiked: false,
     createTime: '2026-09-29T19:30:00',
     author: { id: 17, nickName: '第三方检测员', icon: '' },
   },

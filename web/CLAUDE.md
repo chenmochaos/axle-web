@@ -10,7 +10,9 @@
 > 运行方式见脚本头部注释与根 README「连真实后端」。
 >
 > **所以 `VITE_USE_MOCK=false` 这条路径是通的**，车字段不再是 `undefined`。
-> 唯一没改造的是 `tb_blog`（仍是餐厅探店内容，图片 404）—— 那是 M4 的数据迁移。
+> 唯一没改造的是 `tb_blog`：M4/M5 的页面与接口**已全部交付**，但库里 4 条种子口碑
+> 仍是餐厅探店文字、配图 `/imgs/blogs/*` 在仓库里不存在。这是**独立的数据迁移**，
+> 需要单独确认后执行，不要在做代码改动时顺手改那几行。
 >
 > 后端类名、接口路径与 Redis key 已统一为 `car` / `brand` / `review`，详见 `../server/CLAUDE.md`。
 
@@ -128,7 +130,8 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
 
 - token 塞在请求头 **`authorization`（全小写）**，拦截器读的就是这个小写 key，
   写 `Authorization` 会 401。已由 `src/api/client.ts` 的拦截器统一处理。
-- 免登录路径仅：`/user/code` `/user/login` `/review/hot` `/car/**` `/brand/**` `/upload/**` `/voucher/**`
+- 免登录路径：`/user/code` `/user/login` `/user/logout` `/user/profile/*` `/review/hot`
+  `/review/*` `/review/likes/*` `/review/of/user` `/car/**` `/brand/**` `/upload/**` `/imgs/**` `/voucher/**`
 - 秒杀返回订单 id ≠ 已落库（Redis Stream 异步），**不要拿返回值立刻查订单**
 - Feed 流分页是 `lastId + offset`，不是 `current` 页码
 - GEO 附近车商需要 `navigator.geolocation` 坐标，不给坐标退化成普通分页
@@ -142,8 +145,9 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
    **没有任何 Java 代码会返回它**。
 2. **`POST /user/login` 返回裸 token 字符串**（不是 JSON 对象）。拿到 token 后必须再调
    `GET /user/me` 才得到 `{id, nickName, icon}`。
-3. **`POST /user/logout` 是后端唯一的占位接口**（返回 `功能未完成`）。
-   登出只能前端做：清 token + 回首页，**不能调后端**。
+3. ~~`POST /user/logout` 是后端占位接口~~ —— **2026-10-17 已实现**。
+   `auth.logout()` 现在先调后端删 Redis token，再清本地；接口失败也照样清本地
+   （否则用户会卡在「登不出去」）。调用方必须 `await`。
 4. **列表接口不返回 `total`**（`/car/list`、`/review/hot` 都走 `Result.ok(list)` 单参重载，
    `total` 恒为 `null`）。「还有没有下一页」只能按**满页判据**推（`deriveHasMore`）。
    代价是最后一批恰好凑满 10 条时多一次空请求（点一下没反应），这是没有 total 时无法避免的。
@@ -273,12 +277,15 @@ main 塌成 0 高，footer 会跳到页首。
 ```
 src/
 ├── api/          client.ts（axios 实例 + **USE_MOCK 的唯一读者**）/ adapt.ts（**唯一允许做字段映射的地方**）
-│                 car.ts / user.ts / order.ts / mock.ts / types.ts（*DTO = 后端原样形状）
+│                 car.ts / review.ts / social.ts / user.ts / order.ts /
+│                 mock.ts（静态种子）/ mockSocial.ts（**有状态**的社交 mock 后端）/ types.ts（*DTO = 后端原样形状）
 ├── components/
 │   ├── ui/       通用组件：AppButton / AppField / AppTag / SkeletonBlock / StatCount
 │   └── business/ 业务组件：HeroSection / IntroCurtain / KindTabs / BrandNav / FilterBar / CarCard /
-│                 FeaturedCars / ReviewFeed / CarHero / SpecTable / VoucherCards / StickyBuyBar
-├── composables/  useCountUp / useReveal（+ useReveal.spec.ts 守 data-reveal 配对）/ useCountdown / useScrollTo
+│                 FeaturedCars / ReviewFeed / ReviewCard / FollowButton / CarHero / SpecTable /
+│                 VoucherCards / StickyBuyBar
+├── composables/  useCountUp / useReveal（+ useReveal.spec.ts 守 data-reveal 配对）/ useCountdown /
+│                 useScrollTo / useRequireLogin（需登录视图的统一入口）
 ├── layouts/      SiteLayout（全站唯一布局，App.vue 用它包住 RouterView）
 ├── lib/          gsap / lenis / intro 单例，fit.ts（车台面积归一公式），time.ts（日期口径，别在组件里重复实现），
 │                 flip.ts（手写共享元素转场，细节见 specs §6.4），carName.ts（展示名口径），phone.ts（手机号校验）
@@ -286,7 +293,8 @@ src/
 ├── stores/       auth.ts —— **项目唯一的 Pinia store**（边界见下）
 ├── styles/       tokens.css（设计 token）+ main.css
 └── views/        HomeView（M1）/ CarDetailView（M2）/ LoginView / SeckillView / CarListView（M3）
-                  / PlaceholderView（M4+ 未交付路由的占位）
+                  / ReviewListView / ReviewDetailView / ReviewEditView / FeedView / DealerView（M4）
+                  / MeView / MeEditView（M5）/ PlaceholderView（只剩 404 在用）
 
 public/cars/      车辆原图（jpg）+ 抠图产物（cut/*.webp）
 （设计文档与截图不在前端目录，统一放在仓库根 `../docs/`：specs / plans / screenshots）
@@ -318,6 +326,28 @@ public/cars/      车辆原图（jpg）+ 抠图产物（cut/*.webp）
 3. **401 的统一处理挂在 `main.ts` 注入的 `setUnauthorizedHandler` 上，不在 `client.ts` 里
    import router。** `router → views → api` 会成环，所以由 `main.ts` 单向下行注入。
    `client.ts` 只负责在拿到 401 / `NeedLoginError` 时调用那个 handler。
+
+### M4/M5 立下的约定（口碑 / 关注 / 签到）
+
+1. **`mockSocial.ts` 是「有状态的 mock 后端」，`mock.ts` 只放静态种子。**
+   点赞数、关注关系、签到、发口碑都会改内存状态，且必须与真机**语义**一致：
+   点赞是切换不是累加、同一天重复签到幂等、关注重复调用不翻倍。
+   `mock.ts` 里的静态口碑数量与 `mockSocial.ts` 的种子必须对得上 ——
+   两处各写一份数字，第一次点赞就会跳变。
+2. **Feed 的游标必须原样回传。** 响应是 `{list, minTime, offset}`，
+   下一页请求就带 `lastId=minTime&offset=offset`。不要改写成页码 —— 后端按 ZSET 分数倒序取，
+   页码语义不存在。空 feed 返回 `Result.ok()`，`data` 是 `null`，前端按空列表处理。
+3. **公开页与登录页要分开处理，不能让访客看到报错。**
+   `/dealer/:id` 的资料与口碑是公开的，只有「关注 / 共同关注」需要登录 ——
+   访客进来应该看到完整主页，社交按钮隐藏或引导登录，而不是整页 401。
+   点赞、发口碑、签到这类写操作才用 `NeedLoginError` 走登录跳转。
+4. **签到状态用「连续签到天数 > 0」推，不要自己维护布尔值。**
+   后端 `GET /user/sign/count` 的语义是「从今天往前连续签到几天」，今天没签就是 0。
+   签到成功后**重新请求 count**，不要在本地 +1 —— 本地加会在断签后算错。
+5. **需登录的视图统一走 `useRequireLogin().ensure()`**，它负责跳登录并带回跳地址；
+   不要在每个 view 里手写 `if (!auth.token) router.push('/login')`。
+6. **上传图片落盘在 classpath 外**（`server/uploads/imgs`），开发时由 Vite proxy 的
+   `/imgs` 规则转发到 8081（无 rewrite）。生产由后端 `MvcConfig` 直接映射。
 
 ## 分档
 

@@ -56,9 +56,12 @@ mvn spring-boot:run              # 8081
 | `POST /car`、`PUT /car` | 新增 / 更新 |
 | `GET /brand/list` | 品牌列表（带拉丁字标 `mark`） |
 | `GET /review/hot` | 热门口碑 |
-| `GET /review/{id}`、`/likes/{id}`、`/of/me`、`/of/user`、`/of/follow`、`POST /review`、`PUT /review/like/{id}` | 口碑其余端点（前端尚未使用） |
-| `POST /upload/review` | 图片上传 |
-| `/user/**`、`/voucher/**`、`/voucher-order/**`、`/follow/**` | 与业务无关，保持原路径 |
+| `GET /review/{id}`、`/likes/{id}`、`/of/user` | 口碑公开读端点 |
+| `GET /review/of/me`、`/of/follow`、`POST /review`、`PUT /review/like/{id}` | 需登录 |
+| `GET /user/profile/{id}`、`PUT /user/profile` | 公开资料 / 改资料（前者公开，后者需登录） |
+| `POST /user/logout`、`POST /user/sign`、`GET /user/sign/count` | 登出 / 签到 / 连续签到天数 |
+| `POST /upload/review`、`GET /imgs/**` | 图片上传与静态访问 |
+| `/voucher/**`、`/voucher-order/**`、`/follow/**` | 与业务无关，保持原路径 |
 
 ### ⚠️ 白名单陷阱（最容易漏的一处）
 
@@ -66,8 +69,15 @@ mvn spring-boot:run              # 8081
 所以 `grep Car` 永远搜不到它。改了 `@RequestMapping` 而漏改这里，表现是：
 **编译通过、启动通过、公开接口全部 401**，没有任何编译期提示。
 
-当前白名单：`/user/code` `/user/login` `/review/hot` `/car/**` `/brand/**` `/upload/**`
-`/voucher/**` `/error`。
+当前白名单：`/user/code` `/user/login` `/user/logout` `/user/profile/*` `/review/hot`
+`/review/*` `/review/likes/*` `/review/of/user` `/car/**` `/brand/**` `/upload/**`
+`/imgs/**` `/voucher/**` `/error`。
+
+两个容易写错的细节：
+
+- `/user/profile/*` 必须是**单星号**。写成 `/**` 会连 `PUT /user/profile` 一起放行 —— 改资料就不需要登录了。
+- `/review/*` 只匹配一段，所以 `POST /review`、`PUT /review/like/{id}`、`/review/of/me`、
+  `/review/of/follow` 仍然受保护；`/review/of/user` 是单独一条公开项。
 
 **`/error` 那一条不能删**：Spring 处理未捕获异常时会把请求转发到 `/error`，那是一次新的分发，
 会再过一遍拦截器。不排除的话任何后端异常（500、缺参数、SQL 写错）都会被改写成 401。
@@ -114,6 +124,10 @@ mvn spring-boot:run              # 8081
 - `usedcar.sql`：**幂等**的二手车迁移 —— 给 `tb_shop` 加 8 个车辆列、`tb_shop_type` 加 `mark`、
   14 行商铺改写成车源、重指券。不删任何行。必须用 `mysql` 命令行客户端执行（脚本里用了 `DELIMITER`）。
 
+- ⚠️ **`tb_blog` 的 4 条种子口碑仍是教程的餐厅探店内容**（标题、正文、`/imgs/blogs/*` 配图），
+  其中图片在仓库里根本不存在。接口与页面都正常工作，只是内容语义与二手车不符。
+  这是**独立的数据迁移**，需要单独确认后执行；不要在做代码改动时顺手改这几行。
+
 - **坐标集中在 3 个城市**：上海 5 台（1/2/3/7/9）、北京 5 台（6/11/12/13/14）、深圳 4 台（4/5/8/10）。
   原因是 `/car/list` 的 GEO 半径**硬编码 5 km**（`CarServiceImpl` 的 `new Distance(5000)`），
   散在 8 个城市时「附近优先」在任何地方都只能查出 1 台。
@@ -137,10 +151,16 @@ Spring Boot 2.7.4 父 POM 默认管理 lombok **1.18.24**，不支持 JDK 17+ �
 `src/main/resources/mapper/*.xml` 的 `namespace` 与 `resultType` 是**全限定类名**。
 IDE 的「重命名」操作默认不会改 XML —— 改包名或类名后必须手动同步，否则启动或首次查询才炸。
 
-### 3. 图片上传目录
+### 3. 图片上传目录（两个都踩过）
 
-`SystemConstants.IMAGE_UPLOAD_DIR` 原先写死 Windows 路径 `D:\lesson\...`，在 Linux 上必然
-`NoSuchFileException`。已改为 `src/main/resources/static/imgs/`（与 `pnpm build:embed` 的产物同目录）。
+1. 原值写死 Windows 路径 `D:\lesson\...`，Linux 上必然失败。
+2. 改成 `src/main/resources/static/imgs` 后**仍然 404**：运行时 Spring 读的是构建期拷贝到
+   `target/classes/static` 的那一份，启动后写进 `src` 的文件没有任何处理器会去读。
+   现在落到 classpath 外的 `uploads/imgs/`（已 gitignore），由
+   `MvcConfig#addResourceHandlers` 把 `/imgs/**` 映射过去。
+3. `MultipartFile.transferTo(File)` 对**相对路径**的解析基准是 Servlet 临时目录，不是 JVM
+   工作目录 —— 必须传 `getAbsoluteFile()`，否则取到
+   `/tmp/tomcat.*/work/.../uploads/imgs/...` 并抛 `FileNotFoundException`。
 
 ## 验证
 
@@ -150,6 +170,11 @@ curl -s http://127.0.0.1:8081/brand/list
 curl -s 'http://127.0.0.1:8081/car/list?typeId=1&current=1&x=121.4737&y=31.2304'
 curl -s http://127.0.0.1:8081/car/5
 curl -s http://127.0.0.1:8081/review/hot
+curl -s http://127.0.0.1:8081/review/4              # 公开详情（id 以 /review/hot 返回为准）
+curl -s http://127.0.0.1:8081/review/of/user?id=2   # 公开作者口碑
+curl -s http://127.0.0.1:8081/user/profile/2        # 公开资料（含粉丝/关注/口碑数）
 curl -s http://127.0.0.1:8081/voucher/list/5        # 走 VoucherMapper.xml，验 XML 全限定名
 curl -si http://127.0.0.1:8081/user/me | head -1    # 期望裸 401
+curl -si -X PUT -H 'Content-Type: application/json' \
+  -d '{"nickName":"x"}' http://127.0.0.1:8081/user/profile | head -1  # 期望 401（白名单没写错）
 ```

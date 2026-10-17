@@ -187,6 +187,7 @@ function brToSpace(html: string): string {
 export function reviewFromDTO(b: ReviewDTO): Review {
   return {
     id: b.id,
+    carId: b.carId,
     title: b.title,
     content: brToSpace(b.content ?? ''),
     // 与 `carFromDTO` 用同一套逗号串处理。空串/多余逗号都吃掉，
@@ -199,6 +200,9 @@ export function reviewFromDTO(b: ReviewDTO): Review {
       : [],
     liked: b.liked ?? 0,
     comments: b.comments ?? 0,
+    // 未登录时后端不写这个字段。`!!` 而不是 `?? false`：后端是 Boolean，
+    // 但万一哪天多传了字符串，`!!` 也不会让类型骗过运行时
+    isLiked: Boolean(b.isLike),
     createTime: b.createTime ?? '',
     // 昵称/头像缺失时给空串而不是编一个「匿名用户」：界面上那一行空着，
     // 好过显示一个后端并不存在的身份。类型要求 `string`，所以不能留 `undefined`。

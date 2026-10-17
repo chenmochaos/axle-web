@@ -24,11 +24,18 @@ public class UploadController {
             String originalFilename = image.getOriginalFilename();
             // 生成新文件名
             String fileName = createNewFileName(originalFilename);
-            // 保存文件
-            image.transferTo(new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName));
-            // 返回结果
-            log.debug("文件上传成功，{}", fileName);
-            return Result.ok(fileName);
+            // 保存文件。
+            // ⚠️ 必须用绝对路径：`MultipartFile.transferTo(File)` 对相对路径的解析
+            // 基准是 Servlet 容器的临时目录（/tmp/tomcat.*/work/...），不是 JVM 的
+            // 工作目录 —— 传相对路径会得到 FileNotFoundException，接口 500。
+            File dest = new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName).getAbsoluteFile();
+            image.transferTo(dest);
+            // 返回结果。必须带 `/imgs` 前缀：文件落盘在
+            // `src/main/resources/static/imgs` 下，Spring 静态资源对外暴露的就是 `/imgs/**`。
+            // 只回 `/reviews/xx` 的话前端拿到的 URL 是 404，而且上传接口本身还是 200。
+            String url = "/imgs" + fileName;
+            log.debug("文件上传成功，{}", url);
+            return Result.ok(url);
         } catch (IOException e) {
             throw new RuntimeException("文件上传失败", e);
         }
@@ -36,12 +43,19 @@ public class UploadController {
 
     @GetMapping("/review/delete")
     public Result deleteReviewImg(@RequestParam("name") String filename) {
-        File file = new File(SystemConstants.IMAGE_UPLOAD_DIR, filename);
-        if (file.isDirectory()) {
-            return Result.fail("错误的文件名称");
+        try {
+            File base = new File(SystemConstants.IMAGE_UPLOAD_DIR).getCanonicalFile();
+            // `name` 来自 query，`../..` 能逃出上传目录删掉任意文件 ——
+            // 必须是「规范化之后仍在上传目录之内」才放行
+            File file = new File(base, filename).getCanonicalFile();
+            if (!file.toPath().startsWith(base.toPath()) || !file.isFile()) {
+                return Result.fail("错误的文件名称");
+            }
+            FileUtil.del(file);
+            return Result.ok();
+        } catch (IOException e) {
+            return Result.fail("删除失败");
         }
-        FileUtil.del(file);
-        return Result.ok();
     }
 
     private String createNewFileName(String originalFilename) {

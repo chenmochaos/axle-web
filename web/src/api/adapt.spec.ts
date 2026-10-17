@@ -282,6 +282,14 @@ describe('reviewFromDTO —— 平铺 → 嵌套、逗号串 → 数组', () => 
     expect(r.content).toBe('')
   })
 
+  it('carId 原样保留、isLike 归一成布尔 —— 未登录时后端不返回 isLike', () => {
+    // `/review/{id}` 的 isReviewLiked 在 UserHolder 为空时直接 return，
+    // 字段缺失必须读成 false（「没点过」），不能是 undefined
+    expect(reviewFromDTO(reviewDTO()).carId).toBe(4)
+    expect(reviewFromDTO(reviewDTO()).isLiked).toBe(false)
+    expect(reviewFromDTO(reviewDTO({ isLike: true })).isLiked).toBe(true)
+  })
+
   it('liked = 0 是「没人点赞」，不能被当成缺失', () => {
     expect(reviewFromDTO(reviewDTO({ liked: 0 })).liked).toBe(0)
   })

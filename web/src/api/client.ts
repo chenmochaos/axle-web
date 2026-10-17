@@ -173,6 +173,18 @@ export async function post<T>(url: string, body?: unknown): Promise<T> {
 }
 
 /**
+ * PUT。后端的写操作有两类形状，调用方别混：
+ *
+ * * `PUT /review/like/{id}`、`PUT /follow/{id}/{isFollow}` —— 参数全在**路径**里，
+ *   没有 body，也不返回数据。传 body 不报错，但会被忽略。
+ * * `PUT /user/profile` —— `@RequestBody UserDTO`，返回更新后的用户。
+ */
+export async function put<T>(url: string, body?: unknown): Promise<T> {
+  const res = await client.put<ApiResult<T>>(url, body)
+  return res.data.data
+}
+
+/**
  * POST + **query 参数**。
  *
  * 需要它是因为后端不是每个 POST 都用 `@RequestBody`：

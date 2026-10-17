@@ -7,6 +7,9 @@
 # 前端构建产物（pnpm build:embed 会把 web/dist 写到这里）
 src/main/resources/static/
 
+# 运行时上传的图片（见 SystemConstants.IMAGE_UPLOAD_DIR）
+uploads/
+
 HELP.md
 target/
 !.mvn/wrapper/maven-wrapper.jar

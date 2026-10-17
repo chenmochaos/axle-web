@@ -40,27 +40,36 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     public Result follow(Long followUserId, Boolean isFollow) {
         //获取登陆用户
         Long id = UserHolder.getUser().getId();
+        // 关注自己没有意义，而且会让「粉丝数」与「关注数」同时 +1，数字看起来像 bug
+        if (id.equals(followUserId)) {
+            return Result.fail("不能关注自己");
+        }
+        String key = "follows:" + id;
         //判断是关注还是取关
         if (isFollow) {
-            //关注 新增数据
-            Follow follow=new Follow();
-            follow.setFollowUserId(followUserId);
-            follow.setUserId(id);
-            boolean isSuccess = save(follow);
-            if (isSuccess){
-                String key="follows:"+id;
-                stringRedisTemplate.opsForSet().add(key,followUserId.toString());
+            // 重复关注不再插一行：tb_follow 没有唯一索引，插两次会让粉丝数翻倍，
+            // 取关时又把两行一起删掉，前后数字对不上
+            long count = lambdaQuery()
+                    .eq(Follow::getUserId, id)
+                    .eq(Follow::getFollowUserId, followUserId)
+                    .count();
+            if (count == 0) {
+                Follow follow = new Follow();
+                follow.setFollowUserId(followUserId);
+                follow.setUserId(id);
+                save(follow);
             }
+            // Redis 是查询走的那一侧，历史数据里可能缺位，这里无条件补齐
+            stringRedisTemplate.opsForSet().add(key, followUserId.toString());
         }else {
             //取关 删除
-            boolean isSuccess = remove(new LambdaQueryWrapper<Follow>()
+            remove(new LambdaQueryWrapper<Follow>()
                     .eq(Follow::getUserId, id)
                     .eq(Follow::getFollowUserId, followUserId)
             );
-            if (isSuccess) {
-                String key="follows:"+id;
-                stringRedisTemplate.opsForSet().remove(key,followUserId);
-            }
+            // ⚠️ 必须传 String：StringRedisTemplate 的 key/value 都是字符串序列化，
+            // 传 Long 会在运行期抛 ClassCastException（取关接口一直是 500 的原因）
+            stringRedisTemplate.opsForSet().remove(key, followUserId.toString());
         }
         return Result.ok();
     }

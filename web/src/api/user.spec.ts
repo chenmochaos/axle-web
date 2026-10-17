@@ -23,7 +23,7 @@ import { mockUser } from './mock'
  *    否则 `catch (NeedLoginError)` 只在一种模式下生效。
  *
  * 第 1、2 条只能靠读后端源码来守（它们是注解，不是返回值），所以最后那组用例
- * 直接扫 Java 源码。读不到后端时跳过而非失败：单独 checkout 前端不该红一片。
+ * 直接扫 Java 源码。前后端现在是同一个仓库的兄弟目录，读不到就该红。
  */
 
 beforeEach(() => {
@@ -135,9 +135,18 @@ describe('与后端源码对契约', () => {
     expect(interceptor).not.toMatch(/getWriter|writeValue/)
   })
 
-  it('/user/logout 仍是「功能未完成」—— 前端不能调它', () => {
-    // 哪天后端实现了真登出，这条会红，提醒把 logoutLocal 换成真调用
-    const logout = controller.slice(controller.indexOf('public Result logout()'))
-    expect(logout.slice(0, logout.indexOf('\n    }'))).toContain('功能未完成')
+  it('/user/logout 读 authorization 头，并允许它缺失', () => {
+    // 白名单放行了登出，所以过期 token 也要能清掉服务端副本；
+    // 头写成 required = true 会让过期用户卡在「登不出去」的状态。
+    const logout = controller.slice(controller.indexOf('public Result logout('))
+    const body = logout.slice(0, logout.indexOf('\n    }'))
+    expect(body).toContain('@RequestHeader(value = "authorization", required = false)')
+  })
+
+  it('PUT /user/profile 必须登录 —— 白名单只能用单星号放行公开资料', () => {
+    const mvc = readFileSync(resolve(BACKEND, 'config/MvcConfig.java'), 'utf8')
+    // `/user/profile/**` 会连无尾段的 `PUT /user/profile` 一起放行，等于改资料不用登录
+    expect(mvc).toContain('"/user/profile/*"')
+    expect(mvc).not.toContain('"/user/profile/**"')
   })
 })

@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { NeedLoginError, getToken } from '@/api/client'
-import { fetchMe, loginWithCode, logoutLocal } from '@/api/user'
+import { fetchMe, loginWithCode, logout as logoutRemote, logoutLocal } from '@/api/user'
 import type { User } from '@/api/types'
 
 /**
@@ -79,14 +79,34 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 登出。**只清本地，不打后端** —— `/user/logout` 是 `init` 分支里的占位接口
-   * （`Result.fail("功能未完成")`），调它只会拿到一个失败结果。
-   * 后端那份 token 留在 Redis 里自己过期（30 分钟），这是已知的功能缺口，
-   * 不是这里偷懒。详见 `api/user.ts` 的 `logoutLocal`。
+   * 登出：通知后端删 token → 清本地 → 清 store 状态。
+   *
+   * **失败也不回滚本地登出。** 网络断了的时候用户的诉求是「离开这台机器」，
+   * 不是「保持登录直到服务器回复」。`api/user.ts` 的 `logout` 已经在 `finally`
+   * 里清了 token，所以这里无论成功失败都要把 `user` 置空 —— 否则会出现
+   * 「token 没了、header 还显示昵称」的撕裂状态。
+   *
+   * 服务端副本没删成功的后果有界：`LOGIN_USER_TTL` 是 30 分钟，
+   * 且它只在 `RefreshTokenInterceptor` 续命时才有请求带上它。
    */
-  function logout(): void {
-    logoutLocal()
-    user.value = null
+  async function logout(): Promise<void> {
+    try {
+      await logoutRemote()
+    } catch {
+      // 服务端删除失败不阻断本地登出，理由见上
+    } finally {
+      user.value = null
+    }
+  }
+
+  /**
+   * 用服务端返回的最新用户覆盖 store（改资料后调用）。
+   *
+   * 必须用**返回值**而不是本地拼一个 `{...user, nickName}`：后端可能对昵称
+   * 做了 trim，头像也可能有服务端归一化。以写接口的响应为准。
+   */
+  function applyUser(next: User): void {
+    user.value = next
   }
 
   /**
@@ -101,5 +121,5 @@ export const useAuthStore = defineStore('auth', () => {
     ready.value = true
   }
 
-  return { user, ready, isLoggedIn, restore, login, logout, forget }
+  return { user, ready, isLoggedIn, restore, login, logout, forget, applyUser }
 })

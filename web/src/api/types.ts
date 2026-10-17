@@ -159,17 +159,59 @@ export interface Brand {
 
 export interface Review {
   id: number
+  /** 关联车源 id（后端列名沿用 `tb_blog.shop_id`，语义是「这台车」） */
+  carId: number
   title: string
   content: string
   images: string[]
   liked: number
   comments: number
   createTime: string
+  /**
+   * 当前登录用户是否点过赞。未登录时后端不写这个字段（`isReviewLiked` 直接 return），
+   * 所以归一成 `false` —— 界面上「未登录」和「点过了」在这一点上表现一致是安全的：
+   * 点下去会走登录，而不是静默取消一个不存在的赞。
+   */
+  isLiked: boolean
   author: {
     id: number
     nickName: string
     icon: string
   }
+}
+
+/** 发布口碑的入参。`images` 传数组，适配层负责拼成后端要的逗号串 */
+export interface ReviewInput {
+  carId: number
+  title: string
+  content: string
+  images?: string[]
+}
+
+/** 关注流的一页。`minTime` / `offset` 是后端多游标分页的两个游标，原样回传 */
+export interface FeedPage {
+  list: Review[]
+  minTime: number
+  offset: number
+  /** 这一页满了就当作还有 —— 后端不返回 total */
+  hasMore: boolean
+}
+
+/**
+ * 车商 / 车评人的公开资料。对应后端 `UserProfileDTO`。
+ *
+ * **不含手机号等私有字段** —— `/user/profile/{id}` 是公开接口，白名单放行。
+ */
+export interface UserProfile {
+  id: number
+  nickName: string
+  icon: string
+  /** 粉丝数 */
+  fans: number
+  /** 关注数 */
+  followee: number
+  /** 发布的口碑数 */
+  reviews: number
 }
 
 export interface Page<T> {
@@ -267,6 +309,8 @@ export interface ReviewDTO {
   content?: string | null
   liked?: number | null
   comments?: number | null
+  /** 当前登录用户是否点过赞；未登录时字段缺失 */
+  isLike?: boolean | null
   createTime?: string | null
 }
 

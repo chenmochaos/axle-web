@@ -113,10 +113,12 @@ describe('useAuthStore', () => {
     expect(auth.isLoggedIn).toBe(false)
   })
 
-  it('logout() 清 token 与用户', async () => {
+  it('logout() 清 token 与用户（异步：先通知后端再清本地）', async () => {
     const auth = useAuthStore()
     await auth.login('13800000000', '123456')
-    auth.logout()
+    // 现在是异步的：服务端删 token 失败也必须清本地，否则用户会卡在「登不出去」。
+    // mock 分支会 delay 一小段，所以调用方必须 await —— 不 await 时下面的断言会早于清理。
+    await auth.logout()
     expect(auth.isLoggedIn).toBe(false)
     expect(auth.user).toBeNull()
     expect(getToken()).toBeNull()

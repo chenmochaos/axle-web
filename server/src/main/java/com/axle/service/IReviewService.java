@@ -62,4 +62,21 @@ public interface IReviewService extends IService<Review> {
      * @return {@link Result}
      */
     Result queryReviewOfFollow(Long max, Integer offset);
+
+    /**
+     * 当前登录用户发布的口碑。
+     *
+     * @param current 页码
+     * @return {@link Result}
+     */
+    Result queryMyReview(Integer current);
+
+    /**
+     * 某个用户发布的口碑（公开）。
+     *
+     * @param current 页码
+     * @param userId  作者 id
+     * @return {@link Result}
+     */
+    Result queryReviewOfUser(Integer current, Long userId);
 }

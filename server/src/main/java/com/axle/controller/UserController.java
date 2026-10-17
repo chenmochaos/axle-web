@@ -55,13 +55,32 @@ public class UserController {
     }
 
     /**
-     * 登出功能
-     * @return 无
+     * 登出功能：删除 Redis 中的登录 token。
+     *
+     * `authorization` 允许缺失 —— 白名单放行了 `/user/logout`，过期 token 也必须能登出。
      */
     @PostMapping("/logout")
-    public Result logout(){
-        // TODO 实现登出功能
-        return Result.fail("功能未完成");
+    public Result logout(
+            @RequestHeader(value = "authorization", required = false) String token) {
+        return userService.logout(token);
+    }
+
+    /**
+     * 公开资料（车商 / 车评人主页）。无需登录，不含手机号。
+     */
+    @GetMapping("/profile/{id}")
+    public Result profile(@PathVariable("id") Long userId) {
+        return userService.queryProfile(userId);
+    }
+
+    /**
+     * 修改当前登录用户的昵称 / 头像。
+     */
+    @PutMapping("/profile")
+    public Result updateProfile(
+            @RequestBody UserDTO userDTO,
+            @RequestHeader(value = "authorization", required = false) String token) {
+        return userService.updateProfile(userDTO, token);
     }
 
     @GetMapping("/me")

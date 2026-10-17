@@ -4,12 +4,18 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.axle.dto.LoginFormDTO;
 import com.axle.dto.Result;
 import com.axle.dto.UserDTO;
+import com.axle.dto.UserProfileDTO;
+import com.axle.entity.Follow;
+import com.axle.entity.Review;
 import com.axle.entity.User;
+import com.axle.mapper.FollowMapper;
+import com.axle.mapper.ReviewMapper;
 import com.axle.mapper.UserMapper;
 import com.axle.service.IUserService;
 import com.axle.utils.RedisConstants;
@@ -47,6 +53,10 @@ import static com.axle.utils.SystemConstants.*;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @Resource
+    private FollowMapper followMapper;
+    @Resource
+    private ReviewMapper reviewMapper;
 
     @Override
     public Result sendCode(String phone, HttpSession session) {
@@ -166,6 +176,70 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         //返回
         return Result.ok(count);
+    }
+
+    @Override
+    public Result logout(String token) {
+        if (StrUtil.isNotBlank(token)) {
+            stringRedisTemplate.delete(LOGIN_USER_KEY + token);
+        }
+        return Result.ok();
+    }
+
+    @Override
+    public Result queryProfile(Long userId) {
+        User user = getById(userId);
+        if (user == null) {
+            return Result.fail("用户不存在");
+        }
+
+        UserProfileDTO profile = BeanUtil.copyProperties(user, UserProfileDTO.class);
+        profile.setFans(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowUserId, userId)));
+        profile.setFollowee(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getUserId, userId)));
+        profile.setReviews(reviewMapper.selectCount(
+                new LambdaQueryWrapper<Review>().eq(Review::getUserId, userId)));
+        return Result.ok(profile);
+    }
+
+    @Override
+    public Result updateProfile(UserDTO userDTO, String token) {
+        UserDTO current = UserHolder.getUser();
+        if (current == null) {
+            return Result.fail("请登录");
+        }
+
+        if (userDTO == null) {
+            return Result.fail("参数错误");
+        }
+        String nickName = StrUtil.trim(userDTO.getNickName());
+        if (StrUtil.isBlank(nickName)) {
+            return Result.fail("昵称不能为空");
+        }
+        if (nickName.length() > 32) {
+            return Result.fail("昵称不能超过 32 个字符");
+        }
+
+        User update = new User().setId(current.getId()).setNickName(nickName);
+        if (userDTO.getIcon() != null) {
+            update.setIcon(userDTO.getIcon());
+        }
+        updateById(update);
+
+        User fresh = getById(current.getId());
+        UserDTO freshDTO = BeanUtil.copyProperties(fresh, UserDTO.class);
+
+        // 登录态是 Redis 里的一份快照，`/user/me` 直接读它。
+        // 只改数据库不同步这里，用户刷新页面就会看到旧昵称 —— 而且不会报任何错。
+        if (StrUtil.isNotBlank(token)) {
+            Map<String, Object> map = BeanUtil.beanToMap(freshDTO, new HashMap<>()
+                    , CopyOptions.create().setIgnoreNullValue(true)
+                            .setFieldValueEditor((name, value) -> value.toString()));
+            String key = LOGIN_USER_KEY + token;
+            stringRedisTemplate.opsForHash().putAll(key, map);
+        }
+        return Result.ok(freshDTO);
     }
 
     private User createUserWithPhone(String phone) {

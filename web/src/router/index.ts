@@ -1,8 +1,11 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 /**
- * 已交付 M1 首页、M2 详情页、M3 登录 / 抢购 / 列表。M4/M5 仍落到 PlaceholderView，
- * 这样导航点得动、URL 结构一次定死，后续填实现不用改路由。
+ * M1 首页、M2 车辆详情、M3 登录 / 抢购 / 列表、M4 口碑 / 关注 / 车商主页、
+ * M5 个人中心都已接上真实视图。PlaceholderView 只留给 404。
+ *
+ * `/review/edit` 必须排在 `/review/:id` **前面**：vue-router 按顺序匹配，
+ * 反过来 `edit` 会被当成 id 吞掉。
  */
 const routes: RouteRecordRaw[] = [
   {
@@ -34,20 +37,33 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/review',
     name: 'review',
-    component: () => import('@/views/PlaceholderView.vue'),
-    meta: { title: '口碑广场', milestone: 'M4' },
+    component: () => import('@/views/ReviewListView.vue'),
+    meta: { title: '口碑广场' },
+  },
+  {
+    // 必须在 /review/:id 之前
+    path: '/review/edit',
+    name: 'review-edit',
+    component: () => import('@/views/ReviewEditView.vue'),
+    meta: { title: '发布口碑' },
   },
   {
     path: '/review/:id',
     name: 'review-detail',
-    component: () => import('@/views/PlaceholderView.vue'),
-    meta: { title: '口碑详情', milestone: 'M4' },
+    component: () => import('@/views/ReviewDetailView.vue'),
+    meta: { title: '口碑详情' },
   },
   {
     path: '/feed',
     name: 'feed',
-    component: () => import('@/views/PlaceholderView.vue'),
-    meta: { title: '关注动态', milestone: 'M4' },
+    component: () => import('@/views/FeedView.vue'),
+    meta: { title: '关注动态' },
+  },
+  {
+    path: '/dealer/:id',
+    name: 'dealer',
+    component: () => import('@/views/DealerView.vue'),
+    meta: { title: '车商主页' },
   },
   {
     path: '/login',
@@ -58,8 +74,14 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/me',
     name: 'me',
-    component: () => import('@/views/PlaceholderView.vue'),
-    meta: { title: '个人中心', milestone: 'M5' },
+    component: () => import('@/views/MeView.vue'),
+    meta: { title: '个人中心' },
+  },
+  {
+    path: '/me/edit',
+    name: 'me-edit',
+    component: () => import('@/views/MeEditView.vue'),
+    meta: { title: '编辑资料' },
   },
   {
     path: '/:pathMatch(.*)*',

@@ -1,6 +1,7 @@
 import { ApiError, USE_MOCK, get, getPage } from './client'
 import { carFromDTO, brandFromDTO, reviewFromDTO } from './adapt'
-import { mockBrands, mockCarCoords, mockCars, mockReviews, mockVouchers } from './mock'
+import { mockBrands, mockCarCoords, mockCars, mockVouchers } from './mock'
+import { mockHotReviews } from './mockSocial'
 import type {
   ReviewDTO,
   Brand,
@@ -424,9 +425,9 @@ export async function fetchSimilarCars(car: Car, limit = 3): Promise<Car[]> {
  */
 export async function fetchHotReviews(current = 1): Promise<Page<Review>> {
   if (USE_MOCK) {
-    const start = (current - 1) * PAGE_SIZE
-    const list = mockReviews.slice(start, start + PAGE_SIZE)
-    return delay({ list, total: mockReviews.length, current, hasMore: deriveHasMore(list.length) })
+    // 走 `mockSocial` 而不是直接读 `mockReviews`：M4 发布的mock 口碑要能出现在首页，
+    // 且排序要与后端一致（后端 `queryHotReview` 是 `liked` 降序，不是数组顺序）。
+    return delay(mockHotReviews(current))
   }
 
   const { list } = await getPage<ReviewDTO>('/review/hot', { current })
