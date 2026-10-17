@@ -48,10 +48,10 @@ const yuan = (fen: number) => formatCount(fen / 100, 0)
           </span>
         </p>
 
-        <!-- ⚠️ 链接用 `voucher.shopId`（= 车 id），**不是** `voucher.id`。
+        <!-- ⚠️ 链接用 `voucher.carId`（= 车 id），**不是** `voucher.id`。
              `/seckill/:id` 的 `:id` 是车 id —— 后端只有「按车查券」的接口，
              拿券 id 拼 URL 会打开另一台车的场次（或什么也没有）。 -->
-        <AppButton :to="`/seckill/${voucher.shopId}`">立即抢购</AppButton>
+        <AppButton :to="`/seckill/${voucher.carId}`">立即抢购</AppButton>
       </div>
     </div>
   </div>

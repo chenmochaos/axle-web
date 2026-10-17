@@ -3,14 +3,14 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   HERO_ELIGIBLE_IDS,
-  blogToReview,
+  reviewFromDTO,
   cutoutPathOf,
   heroCutoutOf,
-  shopToCar,
-  typeToBrand,
+  carFromDTO,
+  brandFromDTO,
 } from './adapt'
 import { mockCars, mockBrands } from './mock'
-import type { BlogDTO, ShopDTO, ShopTypeDTO } from './types'
+import type { ReviewDTO, CarDTO, BrandDTO } from './types'
 
 /**
  * 这些用例守的是适配层的三类静默失败 —— 三种都「不报错、只是不对」：
@@ -27,8 +27,8 @@ import type { BlogDTO, ShopDTO, ShopTypeDTO } from './types'
 /** '/cars/cut/x.webp' → '<repo>/public/cars/cut/x.webp' */
 const onDisk = (url: string) => resolve(process.cwd(), 'public', url.replace(/^\//, ''))
 
-/** 最小合法 `ShopDTO`，用例只覆写自己关心的字段 */
-function dto(over: Partial<ShopDTO> = {}): ShopDTO {
+/** 最小合法 `CarDTO`，用例只覆写自己关心的字段 */
+function dto(over: Partial<CarDTO> = {}): CarDTO {
   return {
     id: 1,
     name: '测试车',
@@ -45,53 +45,53 @@ function dto(over: Partial<ShopDTO> = {}): ShopDTO {
   }
 }
 
-describe('shopToCar —— 三处结构性换算', () => {
+describe('carFromDTO —— 三处结构性换算', () => {
   it('images 逗号串 → 数组，并丢掉空段与多余空白', () => {
-    expect(shopToCar(dto({ images: '/a.jpg,/b.jpg' })).images).toEqual(['/a.jpg', '/b.jpg'])
+    expect(carFromDTO(dto({ images: '/a.jpg,/b.jpg' })).images).toEqual(['/a.jpg', '/b.jpg'])
     // 只有一个值（后端最常见的形状）
-    expect(shopToCar(dto({ images: '/a.jpg' })).images).toEqual(['/a.jpg'])
+    expect(carFromDTO(dto({ images: '/a.jpg' })).images).toEqual(['/a.jpg'])
     // 尾随逗号 / 连续逗号 / 逗号后带空格 —— 都产出 `['', ...]` 这种空串，必须滤掉
-    expect(shopToCar(dto({ images: '/a.jpg, ,/b.jpg,' })).images).toEqual(['/a.jpg', '/b.jpg'])
+    expect(carFromDTO(dto({ images: '/a.jpg, ,/b.jpg,' })).images).toEqual(['/a.jpg', '/b.jpg'])
     // 真有空串这一列（后端 `images` 可空）
-    expect(shopToCar(dto({ images: '' })).images).toEqual([])
+    expect(carFromDTO(dto({ images: '' })).images).toEqual([])
   })
 
   it('avgPrice / originalPrice 分 → 元，四舍五入到整数', () => {
-    expect(shopToCar(dto({ avgPrice: 9880000 })).price).toBe(98800)
+    expect(carFromDTO(dto({ avgPrice: 9880000 })).price).toBe(98800)
     // 不会出现角分：后端给奇数分也要落到整数元
-    expect(shopToCar(dto({ avgPrice: 12345 })).price).toBe(123)
-    expect(shopToCar(dto({ avgPrice: 9880000, originalPrice: 12980000 })).originalPrice).toBe(129800)
+    expect(carFromDTO(dto({ avgPrice: 12345 })).price).toBe(123)
+    expect(carFromDTO(dto({ avgPrice: 9880000, originalPrice: 12980000 })).originalPrice).toBe(129800)
   })
 
   it('score 是 ×10 的整数 → 还原成 0–5 的小数', () => {
-    expect(shopToCar(dto({ score: 47 })).score).toBe(4.7)
-    expect(shopToCar(dto({ score: 50 })).score).toBe(5)
+    expect(carFromDTO(dto({ score: 47 })).score).toBe(4.7)
+    expect(carFromDTO(dto({ score: 50 })).score).toBe(5)
   })
 
   it('distance 是**米**（GEO 查询）→ 公里，保留一位小数', () => {
     // 首页卡片与详情页都写死 `{{ car.distance }} km`，不换算会渲染出「674.1382 km」
-    expect(shopToCar(dto({ distance: 674.1382 })).distance).toBe(0.7)
-    expect(shopToCar(dto({ distance: 4482.8281 })).distance).toBe(4.5)
-    expect(shopToCar(dto({ distance: 1000 })).distance).toBe(1)
+    expect(carFromDTO(dto({ distance: 674.1382 })).distance).toBe(0.7)
+    expect(carFromDTO(dto({ distance: 4482.8281 })).distance).toBe(4.5)
+    expect(carFromDTO(dto({ distance: 1000 })).distance).toBe(1)
   })
 
   it('没传坐标时后端不返回 distance —— 不补 0（0 km 是「就在楼下」的意思）', () => {
-    expect(shopToCar(dto()).distance).toBeUndefined()
-    expect(shopToCar(dto({ distance: null })).distance).toBeUndefined()
+    expect(carFromDTO(dto()).distance).toBeUndefined()
+    expect(carFromDTO(dto({ distance: null })).distance).toBeUndefined()
   })
 })
 
-describe('shopToCar —— kind 与缺字段', () => {
+describe('carFromDTO —— kind 与缺字段', () => {
   it('kind 只认字面量 motorcycle，其余（含 null）都视作汽车', () => {
-    expect(shopToCar(dto({ kind: 'motorcycle' })).kind).toBe('motorcycle')
-    expect(shopToCar(dto({ kind: 'car' })).kind).toBe('car')
+    expect(carFromDTO(dto({ kind: 'motorcycle' })).kind).toBe('motorcycle')
+    expect(carFromDTO(dto({ kind: 'car' })).kind).toBe('car')
     // 历史数据是 null（`usedcar.sql` 之前灌的餐饮行就没这一列）
-    expect(shopToCar(dto({ kind: null })).kind).toBe('car')
-    expect(shopToCar(dto()).kind).toBe('car')
+    expect(carFromDTO(dto({ kind: null })).kind).toBe('car')
+    expect(carFromDTO(dto()).kind).toBe('car')
   })
 
   it('后端没给的字段一律 undefined，不伪造占位值', () => {
-    const c = shopToCar(dto())
+    const c = carFromDTO(dto())
     expect(c.mileage).toBeUndefined()
     expect(c.registerDate).toBeUndefined()
     expect(c.gearbox).toBeUndefined()
@@ -103,7 +103,7 @@ describe('shopToCar —— kind 与缺字段', () => {
   })
 
   it('后端给了 null 的字段也落到 undefined —— 两种「没有」不该在类型上分叉', () => {
-    const c = shopToCar(dto({ displacement: null, ownerCount: null, originalPrice: null }))
+    const c = carFromDTO(dto({ displacement: null, ownerCount: null, originalPrice: null }))
     expect(c.displacement).toBeUndefined()
     expect(c.ownerCount).toBeUndefined()
     expect(c.originalPrice).toBeUndefined()
@@ -112,12 +112,12 @@ describe('shopToCar —— kind 与缺字段', () => {
   it('ownerCount = 0 是一手车，不能被当成缺失丢掉', () => {
     // 0 是有效值。若用 `?? undefined` 之外的写法（如 `|| undefined`）会被吞掉，
     // 表现是「一手车」那行消失 —— 而一手车恰恰是最该写出来的一行。
-    expect(shopToCar(dto({ ownerCount: 0 })).ownerCount).toBe(0)
+    expect(carFromDTO(dto({ ownerCount: 0 })).ownerCount).toBe(0)
   })
 
   it('品牌名由调用方带入，缺省是空串而不是编一个', () => {
-    expect(shopToCar(dto(), '宝马').brand).toBe('宝马')
-    expect(shopToCar(dto()).brand).toBe('')
+    expect(carFromDTO(dto(), '宝马').brand).toBe('宝马')
+    expect(carFromDTO(dto()).brand).toBe('')
   })
 })
 
@@ -187,8 +187,8 @@ describe('白名单与 mock 对账（漂移守卫）', () => {
   })
 })
 
-describe('typeToBrand', () => {
-  const shopType = (over: Partial<ShopTypeDTO> = {}): ShopTypeDTO => ({
+describe('brandFromDTO', () => {
+  const brandDTO = (over: Partial<BrandDTO> = {}): BrandDTO => ({
     id: 1,
     name: '宝马',
     mark: 'BMW',
@@ -196,36 +196,36 @@ describe('typeToBrand', () => {
   })
 
   it('中文名与拉丁字标各归各位', () => {
-    expect(typeToBrand(shopType())).toEqual({ id: 1, name: '宝马', mark: 'BMW' })
+    expect(brandFromDTO(brandDTO())).toEqual({ id: 1, name: '宝马', mark: 'BMW' })
   })
 
   it('mark 缺失/空白时给空串，**不**用中文名兜底', () => {
     // 字标走 `--font-display`（Oswald），没有 CJK 字形。用中文名兜底会掉回另一种字体，
     // 一行里两种字体比一行里空一层更难看（CLAUDE.md §1.2）。
-    expect(typeToBrand(shopType({ mark: null })).mark).toBe('')
-    expect(typeToBrand(shopType({ mark: undefined })).mark).toBe('')
-    expect(typeToBrand(shopType({ mark: '   ' })).mark).toBe('')
+    expect(brandFromDTO(brandDTO({ mark: null })).mark).toBe('')
+    expect(brandFromDTO(brandDTO({ mark: undefined })).mark).toBe('')
+    expect(brandFromDTO(brandDTO({ mark: '   ' })).mark).toBe('')
   })
 
   it('mark 两侧空白被裁掉（后端是自由文本列，灌数据时容易带空格）', () => {
-    expect(typeToBrand(shopType({ mark: ' BMW ' })).mark).toBe('BMW')
+    expect(brandFromDTO(brandDTO({ mark: ' BMW ' })).mark).toBe('BMW')
   })
 
   it('不臆造后端没有的 count', () => {
-    expect(typeToBrand(shopType()).count).toBeUndefined()
+    expect(brandFromDTO(brandDTO()).count).toBeUndefined()
   })
 
   it('mock 的每个品牌都能过一遍适配（真机路径下品牌表走的就是这个函数）', () => {
-    const brands = mockBrands.map((b) => typeToBrand({ id: b.id, name: b.name, mark: b.mark }))
+    const brands = mockBrands.map((b) => brandFromDTO({ id: b.id, name: b.name, mark: b.mark }))
     expect(brands.every((b) => b.name && b.mark)).toBe(true)
   })
 })
 
-/** 最小合法 `BlogDTO`（后端 `entity/Blog.java`）。真机 `/blog/hot` 的实测形状 */
-function blog(over: Partial<BlogDTO> = {}): BlogDTO {
+/** 最小合法 `ReviewDTO`（后端 `entity/Review.java`）。真机 `/review/hot` 的实测形状 */
+function reviewDTO(over: Partial<ReviewDTO> = {}): ReviewDTO {
   return {
     id: 4,
-    shopId: 4,
+    carId: 4,
     userId: 2,
     name: '可可今天不吃肉',
     icon: '/imgs/icons/kkjtbcr.jpg',
@@ -242,77 +242,77 @@ function blog(over: Partial<BlogDTO> = {}): BlogDTO {
 /**
  * 这个 suite 是一个**已经发生过的故障**的回归判据，不是假想的边界。
  *
- * 真机 `/blog/hot` 原先不过适配层，平铺的作者字段被当成 `author` 对象用，
+ * 真机 `/review/hot` 原先不过适配层，平铺的作者字段被当成 `author` 对象用，
  * `ReviewFeed` 读 `undefined.nickName` 抛 TypeError —— 首页那一整块 section
  * 直接消失，控制台只有一条不显眼的错误，页面上完全看不出是「坏了」。
  *
  * 所以下面每一条都对应那个故障的一个必要条件，尤其是第一条：它就是这个 bug 本身。
  */
-describe('blogToReview —— 平铺 → 嵌套、逗号串 → 数组', () => {
+describe('reviewFromDTO —— 平铺 → 嵌套、逗号串 → 数组', () => {
   it('平铺的 userId/name/icon 组装成 author 对象（**这就是之前炸掉的那一处**）', () => {
-    const r = blogToReview(blog())
+    const r = reviewFromDTO(reviewDTO())
     expect(r.author).toEqual({ id: 2, nickName: '可可今天不吃肉', icon: '/imgs/icons/kkjtbcr.jpg' })
     // 直接读一次，锁住组件里那句 `lead.author.nickName` 的访问路径
     expect(() => r.author.nickName).not.toThrow()
   })
 
   it('images 逗号串 → 数组，空段与多余空白同样滤掉', () => {
-    expect(blogToReview(blog({ images: '/a.jpg,/b.jpg' })).images).toEqual(['/a.jpg', '/b.jpg'])
-    expect(blogToReview(blog({ images: '/a.jpg, ,/b.jpg,' })).images).toEqual(['/a.jpg', '/b.jpg'])
+    expect(reviewFromDTO(reviewDTO({ images: '/a.jpg,/b.jpg' })).images).toEqual(['/a.jpg', '/b.jpg'])
+    expect(reviewFromDTO(reviewDTO({ images: '/a.jpg, ,/b.jpg,' })).images).toEqual(['/a.jpg', '/b.jpg'])
   })
 
   it('images 为空/null/空串时给空数组 —— `images[0]` 不能是 undefined', () => {
     // `Review.images` 是 `string[]`（非可选），`ReviewFeed` 的 `<img :src="lead.images[0]">`
     // 直接下标取值，不做防御。这里漏了就是又一个「读 undefined 的属性」
-    expect(blogToReview(blog({ images: null })).images).toEqual([])
-    expect(blogToReview(blog({ images: '' })).images).toEqual([])
-    expect(blogToReview(blog({ images: undefined })).images).toEqual([])
+    expect(reviewFromDTO(reviewDTO({ images: null })).images).toEqual([])
+    expect(reviewFromDTO(reviewDTO({ images: '' })).images).toEqual([])
+    expect(reviewFromDTO(reviewDTO({ images: undefined })).images).toEqual([])
   })
 
   it('作者昵称/头像缺失时给空串，**不**编一个「匿名用户」', () => {
-    const r = blogToReview(blog({ name: null, icon: undefined }))
+    const r = reviewFromDTO(reviewDTO({ name: null, icon: undefined }))
     expect(r.author.nickName).toBe('')
     expect(r.author.icon).toBe('')
   })
 
   it('liked / comments / content / createTime 缺失不落 undefined（模板里直接插值）', () => {
-    const r = blogToReview(blog({ liked: null, comments: undefined, content: null }))
+    const r = reviewFromDTO(reviewDTO({ liked: null, comments: undefined, content: null }))
     expect(r.liked).toBe(0)
     expect(r.comments).toBe(0)
     expect(r.content).toBe('')
   })
 
   it('liked = 0 是「没人点赞」，不能被当成缺失', () => {
-    expect(blogToReview(blog({ liked: 0 })).liked).toBe(0)
+    expect(reviewFromDTO(reviewDTO({ liked: 0 })).liked).toBe(0)
   })
 
   it('content 里的换行标签变成空格，**不会**在页面上显示成字面 `<br/>`', () => {
     // 真机 tb_blog.content 是 HTML 片段（实测 4 行共 40 个 `<br/>` + 29 个 `<br>`，无别的标签），
     // 而 mock 全是纯文本 —— `Review.content` 的语义由 mock 定义，所以这里必须归一化。
     // 不处理的表现是用户看见「一半烟火<br/>一半诗意」，截图里非常显眼。
-    const r = blogToReview(blog({ content: '一半烟火<br/>一半诗意' }))
+    const r = reviewFromDTO(reviewDTO({ content: '一半烟火<br/>一半诗意' }))
     expect(r.content).toBe('一半烟火 一半诗意')
     expect(r.content).not.toContain('<br')
   })
 
   it('三种 `<br>` 写法都吃掉：`<br/>` / `<br>` / `<br />`，大小写不敏感', () => {
-    expect(blogToReview(blog({ content: 'a<br/>b' })).content).toBe('a b')
-    expect(blogToReview(blog({ content: 'a<br>b' })).content).toBe('a b')
-    expect(blogToReview(blog({ content: 'a<br />b' })).content).toBe('a b')
-    expect(blogToReview(blog({ content: 'a<BR/>b' })).content).toBe('a b')
+    expect(reviewFromDTO(reviewDTO({ content: 'a<br/>b' })).content).toBe('a b')
+    expect(reviewFromDTO(reviewDTO({ content: 'a<br>b' })).content).toBe('a b')
+    expect(reviewFromDTO(reviewDTO({ content: 'a<br />b' })).content).toBe('a b')
+    expect(reviewFromDTO(reviewDTO({ content: 'a<BR/>b' })).content).toBe('a b')
     // 连续换行（真机数据里很常见）压成空格，不留一串空白
-    expect(blogToReview(blog({ content: 'a<br/><br/>b' })).content).toBe('a  b')
+    expect(reviewFromDTO(reviewDTO({ content: 'a<br/><br/>b' })).content).toBe('a  b')
   })
 
   it('**不是 sanitizer**：`<br>` 以外的标签原样留着', () => {
     // 边界要写死：今天的数据只有 `<br>`，但别让下一个读到这个函数的人以为它可以当清洗器用。
-    // 真要渲染富文本，M4 该去用原始的 BlogDTO，而不是把这个函数扩成清洗器。
+    // 真要渲染富文本，M4 该去用原始的 ReviewDTO，而不是把这个函数扩成清洗器。
     const html = '<b>加粗</b>与<a href="#">链接</a>'
-    expect(blogToReview(blog({ content: html })).content).toBe(html)
+    expect(reviewFromDTO(reviewDTO({ content: html })).content).toBe(html)
   })
 
   it('id / title / createTime 一一对应，不串字段', () => {
-    const r = blogToReview(blog({ id: 7, title: 'T', createTime: '2026-01-02T03:04:05' }))
+    const r = reviewFromDTO(reviewDTO({ id: 7, title: 'T', createTime: '2026-01-02T03:04:05' }))
     expect(r.id).toBe(7)
     expect(r.title).toBe('T')
     expect(r.createTime).toBe('2026-01-02T03:04:05')

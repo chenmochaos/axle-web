@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { PHONE_PATTERN, isValidPhone, isValidSmsCode } from './phone'
 
@@ -31,11 +31,12 @@ function javaMatches(pattern: string, s: string): boolean {
   return m !== null && m.index === 0 && m[0] === s
 }
 
+// 前端与后端现在是同一个仓库的兄弟目录，文件**不可能缺失**。
+// 早先这里用 `skipIf` 兜底，已删掉：缺失应当让测试红掉，而不是安静地少跑一组断言。
 const PATTERNS_JAVA = resolve(
   process.cwd(),
-  '../hmdp-master/src/main/java/com/hmdp/utils/RegexPatterns.java',
+  '../server/src/main/java/com/axle/utils/RegexPatterns.java',
 )
-const backendAvailable = existsSync(PATTERNS_JAVA)
 
 /**
  * 从 Java 源码里取出 `PHONE_REGEX` 的**运行时**值。
@@ -45,12 +46,9 @@ const backendAvailable = existsSync(PATTERNS_JAVA)
  * 「反斜杠后面跟个 d」的字面量，于是所有合法手机号都被判非法 —— 这个 bug 在
  * 第一次跑就靠下面的等价性用例抓出来了（字符串相等那条也会红，但信息量小得多）。
  */
-const backendPattern = backendAvailable
-  ? /PHONE_REGEX\s*=\s*"((?:[^"\\]|\\.)*)"/.exec(readFileSync(PATTERNS_JAVA, 'utf8'))?.[1]?.replace(
-      /\\\\/g,
-      '\\',
-    )
-  : undefined
+const backendPattern = /PHONE_REGEX\s*=\s*"((?:[^"\\]|\\.)*)"/.exec(
+  readFileSync(PATTERNS_JAVA, 'utf8'),
+)?.[1]?.replace(/\\\\/g, '\\')
 
 describe('isValidPhone —— 基本判据', () => {
   it.each([
@@ -115,7 +113,7 @@ describe('isValidPhone —— 基本判据', () => {
 
 /* ── 与后端源码的对齐 ──────────────────────────────────────────────────── */
 
-describe.skipIf(!backendAvailable || !backendPattern)('与后端正则对齐', () => {
+describe('与后端正则对齐', () => {
   it('PHONE_PATTERN 与 RegexPatterns.java 里的字面量逐字相同', () => {
     expect(PHONE_PATTERN).toBe(backendPattern)
   })

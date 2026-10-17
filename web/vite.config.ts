@@ -13,7 +13,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 后端：hmdp-master，端口 8081
+      // 后端：同仓库的 server/，端口 8081
       '/api': {
         target: 'http://127.0.0.1:8081',
         changeOrigin: true,

@@ -4,7 +4,7 @@
  *
  * ── 三类数据的加载顺序 ────────────────────────────────────────────
  *
- * 车辆本体必须先到（没有它连 `shopId` 都不知道），券与相似车源都依赖它，
+ * 车辆本体必须先到（没有它连 `carId` 都不知道），券与相似车源都依赖它，
  * 所以是「先 1 后 2」两段，第二段两者 `Promise.all` 并行。
  * 不把三个请求堆成一次 `Promise.all`，是因为后两个的入参就是第一个的结果 ——
  * 硬写成一次只能靠假 id 先发请求。
@@ -26,7 +26,7 @@ import { useRoute } from 'vue-router'
 import {
   fetchCarDetail,
   fetchSimilarCars,
-  fetchVouchersOfShop,
+  fetchVouchersOfCar,
   isSeckillLive,
   kindOf,
 } from '@/api/car'
@@ -108,7 +108,7 @@ onMounted(async () => {
   car.value = found ?? null
 
   if (found) {
-    const [vs, sim] = await Promise.all([fetchVouchersOfShop(found.id), fetchSimilarCars(found)])
+    const [vs, sim] = await Promise.all([fetchVouchersOfCar(found.id), fetchSimilarCars(found)])
     vouchers.value = vs
     similar.value = sim
   } else {

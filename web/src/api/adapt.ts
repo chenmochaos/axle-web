@@ -1,11 +1,11 @@
-import type { BlogDTO, Brand, Car, Review, ShopDTO, ShopTypeDTO, VehicleKind } from './types'
+import type { ReviewDTO, Brand, Car, Review, CarDTO, BrandDTO, VehicleKind } from './types'
 
 /**
  * 后端形状 → 前端展示模型。**字段映射只允许发生在这个文件里。**
  *
  * ── 为什么需要一个适配层 ────────────────────────────────────────────────
  *
- * 后端是 hmdp（黑马点评）的商铺接口，前端是二手车平台。表名、接口路径、
+ * 后端是 hmdp（黑马点评）的车源接口，前端是二手车平台。表名、接口路径、
  * 响应结构全部保持不变，差异靠这一层抹平。三处不一致是**结构性的**，不是遗漏：
  *
  * | 后端 | 前端 | 为什么不让步 |
@@ -84,58 +84,58 @@ function fenToYuan(fen: number): number {
 }
 
 /**
- * `ShopDTO` → `Car`。
+ * `CarDTO` → `Car`。
  *
  * `brand` 必须由调用方从品牌表带过来：`tb_shop` 只有 `type_id`，
- * 品牌名在 `tb_shop_type` 里，而 `/shop/of/type` **不做 join**（响应里没有品牌名字段）。
+ * 品牌名在 `tb_shop_type` 里，而 `/car/list` **不做 join**（响应里没有品牌名字段）。
  * 传空串表示品牌表查不到 —— UI 上那一行不渲染，好过编一个名字。
  */
-export function shopToCar(shop: ShopDTO, brand = ''): Car {
-  const images = shop.images
-    ? shop.images
+export function carFromDTO(dto: CarDTO, brand = ''): Car {
+  const images = dto.images
+    ? dto.images
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
     : []
 
   return {
-    id: shop.id,
-    name: shop.name,
+    id: dto.id,
+    name: dto.name,
     brand,
-    kind: toKind(shop.kind),
-    price: fenToYuan(shop.avgPrice),
+    kind: toKind(dto.kind),
+    price: fenToYuan(dto.avgPrice),
     // `null` → `undefined`：模板里 `v-if="car.originalPrice"` 对两者都成立，
     // 但 `Car.originalPrice` 是可选字段，留 `null` 会与「没有这个字段」在类型上分叉
-    originalPrice: shop.originalPrice != null ? fenToYuan(shop.originalPrice) : undefined,
+    originalPrice: dto.originalPrice != null ? fenToYuan(dto.originalPrice) : undefined,
     images,
-    cutout: heroCutoutOf(shop.id, images),
-    mileage: shop.mileage ?? undefined,
-    registerDate: shop.registerDate ?? undefined,
+    cutout: heroCutoutOf(dto.id, images),
+    mileage: dto.mileage ?? undefined,
+    registerDate: dto.registerDate ?? undefined,
     // `gearbox` 只有「自动 / 手动」两个合法值，后端是自由文本列。
     // 这里**不做白名单校验**：出现第三个值时宁可让类型断言漏过去，
     // 也不要静默吞掉 —— 吞掉的表现是「变速箱这一行凭空消失」，查起来毫无线索。
-    gearbox: (shop.gearbox as Car['gearbox']) ?? undefined,
-    fuel: shop.fuel ?? undefined,
-    displacement: shop.displacement ?? undefined,
-    ownerCount: shop.ownerCount ?? undefined,
-    address: shop.address,
-    score: shop.score / 10,
-    sold: shop.sold,
+    gearbox: (dto.gearbox as Car['gearbox']) ?? undefined,
+    fuel: dto.fuel ?? undefined,
+    displacement: dto.displacement ?? undefined,
+    ownerCount: dto.ownerCount ?? undefined,
+    address: dto.address,
+    score: dto.score / 10,
+    sold: dto.sold,
     // **后端给的是米，前端要的是公里**（模板里是 `{{ car.distance }} km`）。
     // 不换算的话「674.1382 km 外的车」会出现在首页卡片上，看着像数据错了，
     // 其实是单位错了。留一位小数，与 mock 的口径一致。
-    distance: shop.distance != null ? Math.round(shop.distance / 100) / 10 : undefined,
+    distance: dto.distance != null ? Math.round(dto.distance / 100) / 10 : undefined,
   }
 }
 
 /**
- * `ShopTypeDTO` → `Brand`。
+ * `BrandDTO` → `Brand`。
  *
  * `mark` 缺失时回退到**空串而不是 `name`**：`mark` 在界面上走 `--font-display`（Oswald），
  * 而 Oswald 没有 CJK 字形，中文名落进去会掉回另一种字体 —— 一行里两种字体比少一行更难看。
  * 详见 CLAUDE.md §1.2。真机上这一列由 `usedcar.sql` 灌满，回退只是防御。
  */
-export function typeToBrand(t: ShopTypeDTO): Brand {
+export function brandFromDTO(t: BrandDTO): Brand {
   return { id: t.id, name: t.name, mark: t.mark?.trim() || '' }
 }
 
@@ -156,7 +156,7 @@ export function typeToBrand(t: ShopTypeDTO): Brand {
  *
  * ⚠️ **这不是一个 sanitizer。** 只处理换行标签，其余标签原样留着 ——
  * 今天的数据里也确实只有 `<br>`。真要渲染富文本（加粗、链接）时，
- * 应该让 M4 直接去用原始的 `BlogDTO`，而不是把这个函数扩成清洗器：
+ * 应该让 M4 直接去用原始的 `ReviewDTO`，而不是把这个函数扩成清洗器：
  * 一个悄悄改写用户内容的适配层，比一个显示得不够漂亮的页面危险得多。
  *
  * 换成**空格**而不是 `\n`：模板里是 `<p>{{ }}</p>`，HTML 默认折叠空白，
@@ -167,12 +167,12 @@ function brToSpace(html: string): string {
 }
 
 /**
- * `BlogDTO` → `Review`。三处结构差异与 `shopToCar` 同源（逗号串→数组、平铺→嵌套、HTML→纯文本）。
+ * `ReviewDTO` → `Review`。三处结构差异与 `carFromDTO` 同源（逗号串→数组、平铺→嵌套、HTML→纯文本）。
  *
  * ── 这个函数是补上一个**已经踩到的坑**，不是为了 M4 ──────────────────────
  *
- * `fetchHotReviews` 的真机分支原先直接 `getPage<Review>('/blog/hot')` 就返回了，
- * 于是后端那条平铺的 `Blog` 被当成 `Review` 用。症状**不是**「口碑区不显示」，
+ * `fetchHotReviews` 的真机分支原先直接 `getPage<Review>('/review/hot')` 就返回了，
+ * 于是后端那条平铺的 `Review` 被当成 `Review` 用。症状**不是**「口碑区不显示」，
  * 而是首页整个抛一个未捕获的渲染错误：
  *
  *     Cannot read properties of undefined (reading 'nickName')
@@ -184,12 +184,12 @@ function brToSpace(html: string): string {
  *
  * 口碑区怎么排版、要不要渲染富文本，是 M4 的事；这里只保证它**不炸、也不显示标签**。
  */
-export function blogToReview(b: BlogDTO): Review {
+export function reviewFromDTO(b: ReviewDTO): Review {
   return {
     id: b.id,
     title: b.title,
     content: brToSpace(b.content ?? ''),
-    // 与 `shopToCar` 用同一套逗号串处理。空串/多余逗号都吃掉，
+    // 与 `carFromDTO` 用同一套逗号串处理。空串/多余逗号都吃掉，
     // `ReviewFeed` 直接取 `images[0]`，不做防御 —— 形状归一化是本层欠它的。
     images: b.images
       ? b.images

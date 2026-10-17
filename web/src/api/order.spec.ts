@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ApiError, NeedLoginError, setToken } from './client'
 import {
@@ -100,23 +100,22 @@ describe('seckill —— mock 服务端行为', () => {
 })
 
 /**
- * 跨仓库契约：把 `order.ts` 里的三个字面量与**后端源码**对一遍。
+ * 同仓库跨目录契约：把 `order.ts` 里的三个字面量与**后端源码**对一遍。
  *
  * 这几条用例存在的理由很实在 —— 前端分支的判据是后端手写的字符串，
  * 两边靠「约定」维系。约定会被违反（后端改文案、前端抄漏一个字），
  * 而违反的表现是「后端拒绝了，界面当成成功」，不报错。
  *
- * 读不到后端源码时（只 clone 了 hmdp-web）**跳过而不是失败**：
- * 这条依赖是跨仓库的，不该让单独 checkout 前端的人红一片。
+ * 前端与后端现在是同一个仓库的兄弟目录，路径**不可能缺失**。早先的
+ * `describe.skipIf(...)` 已删掉：读不到源码应当让测试红掉，而不是安静地少跑一组断言。
  */
 const BACKEND_SRC = resolve(
   process.cwd(),
-  '../hmdp-master/src/main/java/com/hmdp/service/impl/VoucherOrderServiceImpl.java',
+  '../server/src/main/java/com/axle/service/impl/VoucherOrderServiceImpl.java',
 )
-const backendAvailable = existsSync(BACKEND_SRC)
 
-describe.skipIf(!backendAvailable)('与后端源码对字面量', () => {
-  const src = backendAvailable ? readFileSync(BACKEND_SRC, 'utf8') : ''
+describe('与后端源码对字面量', () => {
+  const src = readFileSync(BACKEND_SRC, 'utf8')
 
   it('三条失败信息在后端源码里逐字存在', () => {
     for (const [name, literal] of Object.entries(SECKILL_ERRORS)) {

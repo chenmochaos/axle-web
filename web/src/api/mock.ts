@@ -3,7 +3,7 @@ import type { Brand, Car, Review, Voucher } from './types'
 /**
  * 种子数据。
  *
- * **2026-10-16 起 mock 不再是因为后端缺字段才存在。** `hmdp-master/usedcar.sql`
+ * **2026-10-16 起 mock 不再是因为后端缺字段才存在。** `server/usedcar.sql`
  * 已经给 `tb_shop` 补齐了车辆列并灌了 14 台真车源，真机路径（`VITE_USE_MOCK=false`）
  * 能渲染出与这里**同一批车**（id 1–13 一一对应，真机多一台 id 14）。
  * mock 留着的理由是别的：不连后端也能开发、能随时造出真机上不好触发的数据
@@ -305,8 +305,8 @@ export const mockCars: Car[] = [
  * ── 为什么坐标是「集中」的 ──────────────────────────────────────────────
  *
  * 这批坐标的前身是 hmdp 原餐饮数据，横跨上海 / 北京 / 杭州 / 深圳 / 成都 / 南京 / 济南，
- * 且多数城市只有 1 台车。而 `/shop/of/type` 的半径**硬编码 5 km**
- * （`ShopServiceImpl.java` 的 `new Distance(5000)`），于是「附近优先」在任何城市都只能
+ * 且多数城市只有 1 台车。而 `/car/list` 的半径**硬编码 5 km**
+ * （`CarServiceImpl.java` 的 `new Distance(5000)`），于是「附近优先」在任何城市都只能
  * 查出 1 台 —— 开关看着是坏的。现在 14 台车收拢到 3 个城市：
  *
  *     上海 5（1/2/3/7/9）   北京 5（6/11/12/13/14）   深圳 4（4/5/8/10）
@@ -319,7 +319,7 @@ export const mockCars: Car[] = [
  * 差的就是 mock 里没有的那台 id 14（见 `mockCars` 上方说明）。第 14 台刻意放进北京而不是
  * 深圳，就是为了让这两城的「附近」结果在两种数据源下逐台对应。
  *
- * ⚠️ 改这里必须同步改 `hmdp-master/usedcar.sql` 里 `tb_shop` 的 `x`/`y`（以及 `address`），
+ * ⚠️ 改这里必须同步改 `server/usedcar.sql` 里 `tb_shop` 的 `x`/`y`（以及 `address`），
  * 两处任缺其一，mock 与真机就会给出不同的「附近」结果。
  */
 export const mockCarCoords: Record<number, { x: number; y: number }> = {
@@ -340,7 +340,7 @@ export const mockCarCoords: Record<number, { x: number; y: number }> = {
 
 /* ── 购车券（`tb_voucher` + `tb_seckill_voucher`）──────────────────────────
  *
- * 对应后端 `GET /voucher/list/{shopId}`，它是一条 **LEFT JOIN**：普通券（`type = 0`）
+ * 对应后端 `GET /voucher/list/{carId}`，它是一条 **LEFT JOIN**：普通券（`type = 0`）
  * 在 `tb_seckill_voucher` 里没有行，`stock` / `beginTime` / `endTime` 就是 `null`。
  * 所以下面的 `type = 0` 条目**刻意不写这三个字段** —— 写成 0 或空串是在教前端
  * 「它们总是有值」，然后详情页上就会渲染出 `NaN`。
@@ -376,7 +376,7 @@ export const mockVouchers: Voucher[] = [
   // 车 5：一张秒杀券（详情页因此出现底部抢购条）+ 一张普通券
   {
     id: 101,
-    shopId: 5,
+    carId: 5,
     title: '限时特价 · 意向金抵 1 万',
     subTitle: '本周限量 50 张，到店核销',
     rules: '到店核销\n可无条件退\n每人限购 1 张\n不与门店其他优惠叠加',
@@ -389,7 +389,7 @@ export const mockVouchers: Voucher[] = [
   },
   {
     id: 102,
-    shopId: 5,
+    carId: 5,
     // 普通券：没有 stock / beginTime / endTime
     title: '免费全车检测券',
     subTitle: '含漆膜仪与举升机检测',
@@ -402,7 +402,7 @@ export const mockVouchers: Voucher[] = [
   // 车 12：另一张秒杀券 —— 首屏第二台，验证抢购条不是只对某一台生效
   {
     id: 103,
-    shopId: 12,
+    carId: 12,
     title: '限时特价 · 骑行装备金抵 5000',
     subTitle: '限量 200 张',
     rules: '到店核销\n可无条件退\n每人限购 1 张',
@@ -419,7 +419,7 @@ export const mockVouchers: Voucher[] = [
   // 否则那个 `v-if` 分支从没被人眼看过。
   {
     id: 104,
-    shopId: 10,
+    carId: 10,
     title: '首年延保抵扣券',
     subTitle: '抵 3000 元延保费用',
     rules: '随车购买延保时抵扣\n不可折现',
@@ -441,7 +441,7 @@ export const mockVouchers: Voucher[] = [
   // 但真机的 20 是**没卖完**剩下的，写 0 等于在 mock 里编了一个真机没有的状态。
   {
     id: 105,
-    shopId: 3,
+    carId: 3,
     title: '限时特价 · 赛道体验日',
     subTitle: '限量 20 张',
     rules: '含赛道日门票 1 张\n需提前 3 天预约',

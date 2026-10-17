@@ -23,10 +23,10 @@ export type KindFilter = 'all' | VehicleKind
 
 /**
  * 车辆。字段是 `tb_shop` 到二手车的语义映射：
- * `shop.name` → 车款名，`shop.avgPrice` → 售价，`shop.score` → 车况评分。
+ * `car.name` → 车款名，`car.avgPrice` → 售价，`car.score` → 车况评分。
  *
- * **这是前端的展示模型，不是后端的响应形状。** 后端原样返回的是 {@link ShopDTO}，
- * 两者的差异全部由 `adapt.ts` 的 `shopToCar()` 抹平（逗号串→数组、分→元、
+ * **这是前端的展示模型，不是后端的响应形状。** 后端原样返回的是 {@link CarDTO}，
+ * 两者的差异全部由 `adapt.ts` 的 `carFromDTO()` 抹平（逗号串→数组、分→元、
  * 评分÷10、`cutout` 由命名约定推导）。**字段映射只允许发生在 adapt.ts 里** ——
  * 在组件里写 `car.images as unknown as string` 这类补丁，等于把适配层架空。
  *
@@ -72,7 +72,7 @@ export interface Car {
    * 排量，纯电为 `undefined`。
    *
    * **不带 `| null`**：后端该列是 SQL NULL，而 Hutool 序列化会**整个省略 null 字段**，
-   * 所以到前端只有「有值」和「键不存在」两种状态，`shopToCar()` 也把 `null` 归一到
+   * 所以到前端只有「有值」和「键不存在」两种状态，`carFromDTO()` 也把 `null` 归一到
    * `undefined`。声明 `| null` 等于多出一个任何真实响应都产不出的状态。
    */
   displacement?: string
@@ -88,7 +88,7 @@ export interface Car {
 }
 
 /**
- * 购车券，映射 `tb_voucher`（+ `tb_seckill_voucher`）。挂在车上（`shopId` = 车 id），
+ * 购车券，映射 `tb_voucher`（+ `tb_seckill_voucher`）。挂在车上（`carId` = 车 id），
  * 详情页的「限时特价」区块就是它。
  *
  * **两种券在同一张表里，靠 `type` 分：**
@@ -103,7 +103,7 @@ export interface Car {
 export interface Voucher {
   id: number
   /** 所属车 id —— 语义上是「这台车」，不是「这家店」 */
-  shopId: number
+  carId: number
   title: string
   subTitle?: string | null
   /** 使用规则，多行用 `\n` 分隔 */
@@ -135,7 +135,7 @@ export interface Brand {
   name: string
   /**
    * 品牌字标（`BMW`），零彩色设计下用文字而非彩色图标。后端可空，
-   * 缺失时 `typeToBrand()` 给**空串**，`BrandNav` 那一行就空着。
+   * 缺失时 `brandFromDTO()` 给**空串**，`BrandNav` 那一行就空着。
    *
    * 为什么不用 `name` 兜底：字标走 `--font-display`（Oswald），而 Oswald 没有 CJK 字形，
    * 中文名落进去会掉回另一种字体 —— 一行里两种字体比一行里少一层更难看。
@@ -151,7 +151,7 @@ export interface Brand {
    * 该品牌在售车源涉及的大类。用来在大类切换时把「一台摩托都没有的品牌」整块撤掉 ——
    * 留着它点进去是空列表，是骗点击。
    *
-   * 后端不返回时（`/shop-type/list` 的响应里没有这一列）视为**未知**，此时不筛，
+   * 后端不返回时（`/brand/list` 的响应里没有这一列）视为**未知**，此时不筛，
    * 而不是当作「什么车都没有」。见 `HomeView` 的 `visibleBrands`。
    */
   kinds?: VehicleKind[]
@@ -182,7 +182,7 @@ export interface Page<T> {
 /* ── 后端原样的形状 ────────────────────────────────────────────────────────
  *
  * 下面这几个类型是**后端 JSON 的逐字段镜像**，不是给人看的展示模型。
- * 它们只应该出现在 `car.ts` 的 `get<ShopDTO>(...)` 与 `adapt.ts` 的入参上；
+ * 它们只应该出现在 `car.ts` 的 `get<CarDTO>(...)` 与 `adapt.ts` 的入参上；
  * 组件里一律用 `Car` / `Brand`。让 `Car` 去兼容后端形状（`images` 同时允许
  * `string` 和 `string[]`）是把适配层要解决的问题推给每一个调用点。
  *
@@ -190,14 +190,14 @@ export interface Page<T> {
  */
 
 /**
- * `GET /shop/{id}`、`GET /shop/of/type` 返回的原始对象。
+ * `GET /car/{id}`、`GET /car/list` 返回的原始对象。
  *
- * 与 `Car` 的三处不一致（都归 `shopToCar()` 管）：
+ * 与 `Car` 的三处不一致（都归 `carFromDTO()` 管）：
  *   * `images` 是**逗号分隔的字符串**（`varchar(1024)`），不是数组
  *   * `avgPrice` / `originalPrice` 单位是**分**
  *   * `score` 是**评分 × 10 的整数**（4.7 分存 47）
  */
-export interface ShopDTO {
+export interface CarDTO {
   id: number
   name: string
   typeId: number
@@ -234,8 +234,8 @@ export interface ShopDTO {
   updateTime?: string
 }
 
-/** `GET /shop-type/list` 返回的原始对象 */
-export interface ShopTypeDTO {
+/** `GET /brand/list` 返回的原始对象 */
+export interface BrandDTO {
   id: number
   name: string
   mark?: string | null
@@ -244,18 +244,18 @@ export interface ShopTypeDTO {
 }
 
 /**
- * `GET /blog/hot` 返回的原始对象（后端 `entity/Blog.java`）。
+ * `GET /review/hot` 返回的原始对象（后端 `entity/Review.java`）。
  *
- * 与 `Review` 的两处不一致（都归 `blogToReview()` 管）：
+ * 与 `Review` 的两处不一致（都归 `reviewFromDTO()` 管）：
  *   * 作者是**三个平铺字段** `userId` / `name` / `icon`，不是嵌套的 `author` 对象
  *   * `images` 是**逗号分隔的字符串**，不是数组
  *
- * ⚠️ `name` / `icon` 在实体上是「用户表的冗余副本」，由 `BlogServiceImpl.queryHotBlog`
- * 的 JOIN 填进来 —— 也就是说这两个字段**只有查询接口才有**，不要以为 `Blog` 天然带作者。
+ * ⚠️ `name` / `icon` 在实体上是「用户表的冗余副本」，由 `ReviewServiceImpl.queryHotReview`
+ * 的 JOIN 填进来 —— 也就是说这两个字段**只有查询接口才有**，不要以为 `Review` 天然带作者。
  */
-export interface BlogDTO {
+export interface ReviewDTO {
   id: number
-  shopId: number
+  carId: number
   userId: number
   /** 作者昵称，来自 JOIN。`tb_blog.name` 这一列的名字与内容不符，别被误导 */
   name?: string | null

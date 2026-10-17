@@ -1,14 +1,14 @@
 import { ApiError, USE_MOCK, get, getPage } from './client'
-import { shopToCar, typeToBrand, blogToReview } from './adapt'
+import { carFromDTO, brandFromDTO, reviewFromDTO } from './adapt'
 import { mockBrands, mockCarCoords, mockCars, mockReviews, mockVouchers } from './mock'
 import type {
-  BlogDTO,
+  ReviewDTO,
   Brand,
   Car,
   Page,
   Review,
-  ShopDTO,
-  ShopTypeDTO,
+  CarDTO,
+  BrandDTO,
   VehicleKind,
   Voucher,
 } from './types'
@@ -41,7 +41,7 @@ export const PAGE_SIZE = 10
 /**
  * 是否还有下一页。
  *
- * **后端不返回 total**：`/shop/of/type` 走的是 `Result.ok(list)` 单参重载，
+ * **后端不返回 total**：`/car/list` 走的是 `Result.ok(list)` 单参重载，
  * 响应里的 `total` 恒为 `null`。原来写成 `current * PAGE_SIZE < total`，
  * 真机下恒为 `false` —— 列表永远加载不出第二页，而且不报错。
  *
@@ -73,7 +73,7 @@ export function kindOf(car: Car): VehicleKind {
  * 从同一个定位得到同一批车。
  */
 
-/** 与后端 `ShopServiceImpl` 里的 `new Distance(5000)` 对齐，单位米 */
+/** 与后端 `CarServiceImpl` 里的 `new Distance(5000)` 对齐，单位米 */
 const GEO_RADIUS_METERS = 5000
 
 /** Redis 用的地球半径（`geohash_helper.c` 里的 `EARTH_RADIUS_IN_METERS`），单位米 */
@@ -106,7 +106,7 @@ export function haversineMeters(
  * 附近的车，按距离升序。复刻后端 GEO 分支的三步：半径过滤 → 距离排序 →
  * `limit(current * PAGE_SIZE)` 后 `skip((current-1) * PAGE_SIZE)` 切片。
  *
- * 返回的距离单位是**米**，与后端一致 —— `shopToCar()` 负责转成公里。
+ * 返回的距离单位是**米**，与后端一致 —— `carFromDTO()` 负责转成公里。
  * 在这里先转会让 mock 与真机在适配层之前就分叉，那种分叉最难查。
  *
  * 半径外一台都没有时返回空数组，这是**正确结果而不是失败**：车源只集中在 3 个城市
@@ -141,8 +141,8 @@ export function nearbyCars(
  * 真机路径的品牌表，**进程内缓存一份**。
  *
  * 为什么需要：`tb_shop` 只有 `type_id`，**品牌名在 `tb_shop_type` 里**，而
- * `/shop/of/type` 不做 join（响应里根本没有品牌名字段）。于是每渲染一页车都要
- * 先有品牌表，才有 `shopToCar(shop, brandName)` 的第二个参数。
+ * `/car/list` 不做 join（响应里根本没有品牌名字段）。于是每渲染一页车都要
+ * 先有品牌表，才有 `carFromDTO(dto, brandName)` 的第二个参数。
  *
  * 记忆化在这里是必要的而不是优化：详情页 + 相似车源 + 列表页会各调一次列表接口，
  * 每次都要品牌表。品牌表在一次会话里几乎不变，发十遍纯属浪费。
@@ -153,8 +153,8 @@ export function nearbyCars(
 let brandCache: Promise<Brand[]> | null = null
 
 function loadRealBrands(): Promise<Brand[]> {
-  brandCache ??= get<ShopTypeDTO[]>('/shop-type/list')
-    .then((list) => list.map(typeToBrand))
+  brandCache ??= get<BrandDTO[]>('/brand/list')
+    .then((list) => list.map(brandFromDTO))
     .catch((err) => {
       brandCache = null
       throw err
@@ -163,20 +163,20 @@ function loadRealBrands(): Promise<Brand[]> {
 }
 
 /** 真机路径的车源列表 → `Car[]`。品牌名靠 `typeId` 查品牌表补上 */
-async function adaptShops(shops: ShopDTO[]): Promise<Car[]> {
+async function adaptCarDTOs(dtos: CarDTO[]): Promise<Car[]> {
   const brands = await loadRealBrands()
   const nameOf = new Map(brands.map((b) => [b.id, b.name]))
-  return shops.map((s) => shopToCar(s, nameOf.get(s.typeId) ?? ''))
+  return dtos.map((s) => carFromDTO(s, nameOf.get(s.typeId) ?? ''))
 }
 
 /**
- * GET /shop-type/list —— 品牌导航。
+ * GET /brand/list —— 品牌导航。
  *
  * mock 路径的 `kinds` 从 `mockCars` **现算**，不写死在 mockBrands 里：
  * 两处各维护一份必然漂移，而漂移的表现很隐蔽 —— 加一台摩托却忘了更新品牌表，
  * 摩托 tab 下这个品牌就凭空消失，看起来像筛选器坏了。
  *
- * 真机路径**拿不到 `kinds`**：`/shop-type/list` 不返回这一列，而要为每个品牌算一次
+ * 真机路径**拿不到 `kinds`**：`/brand/list` 不返回这一列，而要为每个品牌算一次
  * 得再发 8 次 `kind=motorcycle` 的查询。留空表示「未知」，`HomeView` 的
  * `visibleBrands` 对未知**不筛**（宁可多显示一个可能为空的品牌，也不能把有车的品牌藏掉）。
  */
@@ -195,7 +195,7 @@ export async function fetchBrands(): Promise<Brand[]> {
 /* ── 车源列表 ────────────────────────────────────────────────────────────── */
 
 /**
- * GET /shop/of/type —— 车源列表。传 x/y 时后端走 Redis GEO 距离排序与 5 km 半径过滤，
+ * GET /car/list —— 车源列表。传 x/y 时后端走 Redis GEO 距离排序与 5 km 半径过滤，
  * 不传是普通分页。
  *
  * ⚠️ **GEO 分支的 `hasMore` 不可信**：`kind` 是在 GEO 取回之后才筛的（Redis GEO 只认坐标、
@@ -235,7 +235,7 @@ export async function fetchCarsByBrand(params: {
     }
 
     const start = (current - 1) * PAGE_SIZE
-    // 按 id 升序 —— 与后端那条 `.orderByAsc(Shop::getId)` 是**同一条契约**。
+    // 按 id 升序 —— 与后端那条 `.orderByAsc(Car::getId)` 是**同一条契约**。
     //
     // 为什么不能直接用 mockCars 的数组顺序：那个顺序是编辑排的（首屏四台写在最前面，
     // 好让 `mock.ts` 读起来像一份编排），而 MySQL 返回的是主键序。两者不一致的后果是
@@ -251,18 +251,18 @@ export async function fetchCarsByBrand(params: {
     return delay({ list, total: pool.length, current, hasMore: deriveHasMore(list.length) })
   }
 
-  const { list } = await getPage<ShopDTO>('/shop/of/type', {
+  const { list } = await getPage<CarDTO>('/car/list', {
     typeId,
     current,
     kind,
     x,
     y,
   })
-  const cars = await adaptShops(list)
+  const cars = await adaptCarDTOs(list)
   return { list: cars, total: cars.length, current, hasMore: deriveHasMore(cars.length) }
 }
 
-/** `typeId` → 品牌名。查不到给空串（`shopToCar` 会把它渲染成整行不显示） */
+/** `typeId` → 品牌名。查不到给空串（`carFromDTO` 会把它渲染成整行不显示） */
 function mockBrandName(typeId: number): string {
   return mockBrands.find((b) => b.id === typeId)?.name ?? ''
 }
@@ -319,43 +319,43 @@ export async function fetchHeroCars(): Promise<Car[]> {
   }
   // 真机路径**按 id 逐台取**，不能拿 `fetchFeaturedCars(4)` 代替：
   // 那是「列表前 4 条」，谁排前面取决于数据库返回顺序，与首屏要的这 4 台毫无关系。
-  // 4 次请求打的是 `cache:shop:{id}`，都在 Redis 里，不是 4 次数据库查询。
+  // 4 次请求打的是 `cache:car:{id}`，都在 Redis 里，不是 4 次数据库查询。
   const cars = await Promise.all(HERO_CAR_IDS.map((id) => fetchCarDetail(id)))
   return cars.filter((c): c is Car => Boolean(c))
 }
 
-/** GET /shop/{id} —— 车辆详情。**不传坐标 → 没有 `distance`**（`hasDealer` 靠 `address`） */
+/** GET /car/{id} —— 车辆详情。**不传坐标 → 没有 `distance`**（`hasDealer` 靠 `address`） */
 export async function fetchCarDetail(id: number): Promise<Car | undefined> {
   if (USE_MOCK) return delay(mockCars.find((c) => c.id === id))
 
-  // 「店铺不存在」要转成 `undefined` 让详情页出空态，**但只转这一种**。
+  // 「车源不存在」要转成 `undefined` 让详情页出空态，**但只转这一种**。
   //
   // 后端在**逻辑过期缓存未命中**时回的正是这一条（`queryWithLogicalExpire` 不回落到
-  // 数据库），所以它既表示「这台车真的不在库里」，也表示「`cache:shop:{id}` 没预热」——
-  // 前端分不出来，只能都当空态。预热靠 `hmdp-master/scripts/init-shop-cache.sh`。
+  // 数据库），所以它既表示「这台车真的不在库里」，也表示「`cache:car:{id}` 没预热」——
+  // 前端分不出来，只能都当空态。预热靠 `server/scripts/init-car-cache.sh`。
   //
   // 其余错误（超时、5xx、后端没起）**必须继续抛**：一并吞成 `undefined` 的表现是
   // 后端整个挂了却显示「车源不存在」，把一次故障伪装成一个正常的空页面。
   try {
-    const shop = await get<ShopDTO>(`/shop/${id}`)
-    return (await adaptShops([shop]))[0]
+    const dto = await get<CarDTO>(`/car/${id}`)
+    return (await adaptCarDTOs([dto]))[0]
   } catch (err) {
-    if (err instanceof ApiError && err.message === '店铺不存在') return undefined
+    if (err instanceof ApiError && err.message === '车源不存在') return undefined
     throw err
   }
 }
 
 /**
- * GET /voucher/list/{shopId} —— 该车的购车券。`shopId` 在二手车语义下就是**车 id**
+ * GET /voucher/list/{carId} —— 该车的购车券。`carId` 在二手车语义下就是**车 id**
  * （一辆车只卖给一个人，车即「店」）。
  *
  * 响应里 `type = 0` 与 `type = 1` **混在一起**（后端是一条 LEFT JOIN），
  * 普通券的 `stock` / `beginTime` / `endTime` 是 `null`。调用方要按 `type` 分支，
  * 别假设这三兄弟总在。
  */
-export async function fetchVouchersOfShop(shopId: number): Promise<Voucher[]> {
-  if (USE_MOCK) return delay(mockVouchers.filter((v) => v.shopId === shopId))
-  return get<Voucher[]>(`/voucher/list/${shopId}`)
+export async function fetchVouchersOfCar(carId: number): Promise<Voucher[]> {
+  if (USE_MOCK) return delay(mockVouchers.filter((v) => v.carId === carId))
+  return get<Voucher[]>(`/voucher/list/${carId}`)
 }
 
 /**
@@ -410,14 +410,14 @@ export async function fetchSimilarCars(car: Car, limit = 3): Promise<Car[]> {
 }
 
 /**
- * GET /blog/hot —— 热门口碑。
+ * GET /review/hot —— 热门口碑。
  *
  * 同样是 `Result.ok(list)` 单参重载，**没有 total**，所以 `hasMore` 用满页判据。
  *
- * ⚠️ 真机分支**必须过 `blogToReview`**：后端 `Blog` 的作者是平铺的
+ * ⚠️ 真机分支**必须过 `reviewFromDTO`**：后端 `Review` 的作者是平铺的
  * `userId`/`name`/`icon`，`Review` 要的是嵌套 `author` —— 直接当 `Review` 用会让
  * `ReviewFeed` 读 `undefined.nickName` 抛错，整块口碑区从首页消失且不报明显的错。
- * 详见 `adapt.ts` 的 `blogToReview`。
+ * 详见 `adapt.ts` 的 `reviewFromDTO`。
  *
  * 内容层面这仍然是**餐厅探店**（真机 `tb_blog` 是 hmdp 原始数据，4 行，
  * 图片指向本仓库不存在的 `/imgs/blogs/...`）。把那批内容和图换成车的，是 M4 的事。
@@ -429,7 +429,7 @@ export async function fetchHotReviews(current = 1): Promise<Page<Review>> {
     return delay({ list, total: mockReviews.length, current, hasMore: deriveHasMore(list.length) })
   }
 
-  const { list } = await getPage<BlogDTO>('/blog/hot', { current })
-  const reviews = list.map(blogToReview)
+  const { list } = await getPage<ReviewDTO>('/review/hot', { current })
+  const reviews = list.map(reviewFromDTO)
   return { list: reviews, total: reviews.length, current, hasMore: deriveHasMore(reviews.length) }
 }

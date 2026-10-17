@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ApiError, NeedLoginError, getToken, setToken } from './client'
 import {
@@ -104,16 +104,18 @@ describe('logoutLocal', () => {
   })
 })
 
-/* ── 跨仓库契约：注解与字面量只能靠读后端源码来守 ───────────────────────── */
+/* ── 同仓库跨目录契约：注解与字面量只能靠读后端源码来守 ─────────────────── */
 
-const BACKEND = resolve(process.cwd(), '../hmdp-master/src/main/java/com/hmdp')
+// 前端与后端现在是同一个仓库的兄弟目录，这条路径**不可能缺失**。
+// 早先这里写的是 `describe.skipIf(...)` —— 那条跳过分支已经删掉：文件缺失应当让测试
+// 红掉，而不是安静地少跑一组断言。
+const BACKEND = resolve(process.cwd(), '../server/src/main/java/com/axle')
 const controllerPath = resolve(BACKEND, 'controller/UserController.java')
 const servicePath = resolve(BACKEND, 'service/impl/UserServiceImpl.java')
-const backendAvailable = existsSync(controllerPath) && existsSync(servicePath)
 
-describe.skipIf(!backendAvailable)('与后端源码对契约', () => {
-  const controller = backendAvailable ? readFileSync(controllerPath, 'utf8') : ''
-  const service = backendAvailable ? readFileSync(servicePath, 'utf8') : ''
+describe('与后端源码对契约', () => {
+  const controller = readFileSync(controllerPath, 'utf8')
+  const service = readFileSync(servicePath, 'utf8')
 
   it('/user/code 收 query 参数，/user/login 收 JSON body', () => {
     // 这两行是本文件存在的首要理由。它俩要是反了，前端 400 而错误信息毫无提示。

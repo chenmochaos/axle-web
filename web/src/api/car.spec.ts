@@ -12,7 +12,7 @@ import {
   fetchFeaturedCars,
   fetchHeroCars,
   fetchSimilarCars,
-  fetchVouchersOfShop,
+  fetchVouchersOfCar,
   haversineMeters,
   isSeckillLive,
   kindOf,
@@ -124,7 +124,7 @@ describe.runIf(USE_MOCK)('附近优先（GEO）', () => {
 
   it('同城 4–5 台，别的城市一台都不给', async () => {
     // 锁的是「坐标集中」这个约定本身。半径 5 km 是后端硬编码
-    // （`ShopServiceImpl.java` 的 `new Distance(5000)`），所以只有同城车进得来 ——
+    // （`CarServiceImpl.java` 的 `new Distance(5000)`），所以只有同城车进得来 ——
     // 哪天有人把某台车的坐标改回别的城市，这里会立刻红。
     const near = await fetchCarsByBrand({ ...shenzhen, current: 1 })
     expect(near.list.map((c) => c.id).sort((a, b) => a - b)).toEqual([4, 5, 8, 10])
@@ -348,18 +348,18 @@ describe('pickSimilar / fetchSimilarCars', () => {
 })
 
 describe.runIf(USE_MOCK)('购车券', () => {
-  it('按 shopId 取，不串车', async () => {
-    const ofCar5 = await fetchVouchersOfShop(5)
+  it('按 carId 取，不串车', async () => {
+    const ofCar5 = await fetchVouchersOfCar(5)
     expect(ofCar5.length).toBeGreaterThan(0)
-    expect(ofCar5.every((v) => v.shopId === 5)).toBe(true)
+    expect(ofCar5.every((v) => v.carId === 5)).toBe(true)
   })
 
   it('没有券的车返回空数组 —— 详情页据此整块不渲染', async () => {
-    expect(await fetchVouchersOfShop(4)).toEqual([])
+    expect(await fetchVouchersOfCar(4)).toEqual([])
   })
 
   it('汇总接口把两种券混在一起返回（后端就是一条 LEFT JOIN）', async () => {
-    const all = await fetchVouchersOfShop(5)
+    const all = await fetchVouchersOfCar(5)
     expect(new Set(all.map((v) => v.type))).toEqual(new Set([0, 1]))
   })
 
@@ -400,7 +400,7 @@ describe.runIf(USE_MOCK)('购车券', () => {
   })
 
   it('秒杀券真的在售期内 —— 时间窗写死会在某天静默失效', async () => {
-    const seckill = (await fetchVouchersOfShop(5)).filter((v) => v.type === 1)
+    const seckill = (await fetchVouchersOfCar(5)).filter((v) => v.type === 1)
     expect(seckill.length).toBeGreaterThan(0)
     expect(seckill.every((v) => isSeckillLive(v))).toBe(true)
   })
@@ -419,7 +419,7 @@ describe.runIf(USE_MOCK)('购车券', () => {
 describe('isSeckillLive', () => {
   const seckill = (over: Partial<Voucher> = {}): Voucher => ({
     id: 1,
-    shopId: 1,
+    carId: 1,
     title: 't',
     payValue: 100,
     actualValue: 200,

@@ -26,20 +26,20 @@ const routes: RouteRecordRaw[] = [
     path: '/seckill/:id',
     name: 'seckill',
     // ⚠️ `:id` 是**车 id**，不是券 id。后端没有「按券 id 查券」的接口，
-    //    只有 `/voucher/list/{shopId}`（shopId = 车 id）；用券 id 会让这个
+    //    只有 `/voucher/list/{carId}`（carId = 车 id）；用券 id 会让这个
     //    URL 不可刷新、不可深链。详见 SeckillView.vue 的文件头。
     component: () => import('@/views/SeckillView.vue'),
     meta: { title: '限时特价' },
   },
   {
-    path: '/blog',
-    name: 'blog',
+    path: '/review',
+    name: 'review',
     component: () => import('@/views/PlaceholderView.vue'),
     meta: { title: '口碑广场', milestone: 'M4' },
   },
   {
-    path: '/blog/:id',
-    name: 'blog-detail',
+    path: '/review/:id',
+    name: 'review-detail',
     component: () => import('@/views/PlaceholderView.vue'),
     meta: { title: '口碑详情', milestone: 'M4' },
   },

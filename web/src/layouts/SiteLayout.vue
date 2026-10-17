@@ -20,7 +20,7 @@ let ctx: gsap.Context | null = null
 
 const navItems = [
   { label: '车源', to: '/cars' },
-  { label: '口碑', to: '/blog' },
+  { label: '口碑', to: '/review' },
   { label: '关注', to: '/feed' },
 ]
 
@@ -30,14 +30,14 @@ const footerGroups = [
     links: [
       { label: '在售车源', to: '/cars' },
       // 这里原来有一条「限时特价 → /seckill/1」。删掉的理由：秒杀券是**按车**的
-      // （`GET /voucher/list/{shopId}`），没有任何接口能列出「全部特价」，
+      // （`GET /voucher/list/{carId}`），没有任何接口能列出「全部特价」，
       // 那个写死的 `1` 也不是任何一张真实券的 id。秒杀的入口就是车辆详情页。
     ],
   },
   {
     title: '社区',
     links: [
-      { label: '口碑广场', to: '/blog' },
+      { label: '口碑广场', to: '/review' },
       { label: '关注动态', to: '/feed' },
     ],
   },

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { fitByArea, STAGE_FILL } from './fit'
 
-/** 现有素材的真实长宽比（抠图产物实测，见 docs/specs §3.6） */
+/** 现有素材的真实长宽比（抠图产物实测，见 ../docs/specs §3.6） */
 const RATIOS = [1.56, 1.92, 1.98, 2.0, 2.11, 2.15, 2.2, 2.25, 2.31, 2.33]
 
 const fitArea = (r: number, w: number, h: number, fill?: number) => {

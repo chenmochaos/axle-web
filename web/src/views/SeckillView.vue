@@ -4,7 +4,7 @@
  *
  * ── 为什么 URL 里放车 id ───────────────────────────────────────────────
  *
- * 后端没有「按券 id 查券」的接口，只有 `GET /voucher/list/{shopId}`（shopId = 车 id）。
+ * 后端没有「按券 id 查券」的接口，只有 `GET /voucher/list/{carId}`（carId = 车 id）。
  * 若 URL 用券 id，刷新页面时就无从知道该去哪张券所属的车，只能靠会话传递 ——
  * 那样这个页面就不可深链、不可刷新、不可分享。用车的 id，一切都从 URL 推得出来。
  *
@@ -27,7 +27,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NeedLoginError } from '@/api/client'
-import { fetchCarDetail, fetchVouchersOfShop, isSeckillLive } from '@/api/car'
+import { fetchCarDetail, fetchVouchersOfCar, isSeckillLive } from '@/api/car'
 import { SECKILL_ERRORS, seckill } from '@/api/order'
 import type { Car, Voucher } from '@/api/types'
 import { formatCount } from '@/composables/useCountUp'
@@ -163,7 +163,7 @@ onMounted(async () => {
   const found = await fetchCarDetail(id)
   car.value = found ?? null
   // 车不存在就不必再问券了 —— 少一次注定为空的请求
-  if (found) vouchers.value = await fetchVouchersOfShop(found.id)
+  if (found) vouchers.value = await fetchVouchersOfCar(found.id)
 
   loaded.value = true
 })

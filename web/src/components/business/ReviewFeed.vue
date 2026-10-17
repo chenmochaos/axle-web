@@ -33,7 +33,7 @@ const formatDate = (iso: string) => {
         <!-- 头条 -->
         <RouterLink
           v-if="lead"
-          :to="`/blog/${lead.id}`"
+          :to="`/review/${lead.id}`"
           class="group block"
           data-reveal
         >
@@ -75,7 +75,7 @@ const formatDate = (iso: string) => {
           <RouterLink
             v-for="review in rest"
             :key="review.id"
-            :to="`/blog/${review.id}`"
+            :to="`/review/${review.id}`"
             class="group flex gap-5 py-6 first:pt-0"
             data-reveal
           >

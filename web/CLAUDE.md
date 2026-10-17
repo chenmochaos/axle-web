@@ -1,23 +1,22 @@
-# hmdp-web — 二手车平台前端（作品集级动效）
+# web/ — 二手车平台前端（作品集级动效）
 
-基于 `../hmdp-master`（完整版后端）的 Vue3 重写。把「本地生活点评」的
-功能语义映射到「二手车交易」：一辆车只能卖给一个人，秒杀 + 一人一单在这里完全自洽。
+本仓库 `web/` 目录的规则。项目总览见根 `README.md`，后端在 `../server`。
+把「本地生活点评」的功能语义映射到「二手车交易」：一辆车只能卖给一个人，秒杀 + 一人一单在这里完全自洽。
 
-> **后端已在 M3 就地改造完成（2026-10-16）。** `tb_shop` 现在是 **23 列**
+> **后端已完成二手车改造。** `tb_shop` 现在是 **23 列**
 > = 原 15 + 8 个车辆列（`mileage` / `register_date` / `gearbox` / `fuel` /
 > `displacement` / `owner_count` / `kind` / `original_price`），`tb_shop_type` 加了 `mark`，
-> 14 行商铺全部改写成车源。迁移脚本是 **`../hmdp-master/usedcar.sql`**（幂等、不删任何行），
-> 运行方式见脚本头部注释与 README「连真实后端」。
+> 14 行车源全部改写成车源。迁移脚本是 **`../server/usedcar.sql`**（幂等、不删任何行），
+> 运行方式见脚本头部注释与根 README「连真实后端」。
 >
-> **所以 `VITE_USE_MOCK=false` 这条路径现在是通的**，车字段不再是 `undefined`。
+> **所以 `VITE_USE_MOCK=false` 这条路径是通的**，车字段不再是 `undefined`。
 > 唯一没改造的是 `tb_blog`（仍是餐厅探店内容，图片 404）—— 那是 M4 的数据迁移。
 >
-> **那份改造没有走新分支，也没做任何 git 操作** —— `hmdp-master` 有无关的未提交改动，
-> 要提交由你决定。
+> 后端类名、接口路径与 Redis key 已统一为 `car` / `brand` / `review`，详见 `../server/CLAUDE.md`。
 
 ## 分支
 
-`main` 为工作分支。设计文档 `docs/specs/`，实现计划 `docs/plans/`。
+`main` 为工作分支。设计文档在仓库根 `../docs/specs/`，实现计划在 `../docs/plans/`。
 
 ## 技术栈
 
@@ -42,11 +41,11 @@ VITE_USE_MOCK=false pnpm dev --port 5174
 
 # 验收截图：驱动系统 Chrome 拍首页各段落，人工看效果。
 # 这是「改完必须亲眼看」的抓手 —— 构建通过不等于页面是对的。
-node scripts/screenshot.mjs                 # 默认 http://localhost:5173/ → /tmp/hmdp-shots
+node scripts/screenshot.mjs                 # 默认 http://localhost:5173/ → /tmp/axle-shots
 node scripts/screenshot.mjs <url> <outDir>  # 换目标
 ```
 
-后端必须先起：`cd ../hmdp-master && mvn spring-boot:run`（端口 8081）。
+后端必须先起：`cd ../server && mvn spring-boot:run`（端口 8081）。
 
 ### 数据源由 `VITE_USE_MOCK` 决定，默认 mock
 
@@ -71,12 +70,11 @@ redis-cli get login:code:<手机号>
 
 登录页在 `import.meta.env.DEV` 下会提示这一点（**生产构建里没有这条提示**）。
 
-## 分支
+## 边界
 
-`main` 为工作分支。设计文档 `docs/specs/`，实现计划 `docs/plans/`。
-
-> **后端 `../hmdp-master` 有无关的未提交改动** —— 在那儿只写文件，
-> **不做任何 git 操作**（要提交由你决定）。M3 的 `usedcar.sql` 就在那个仓库里。
+前端只通过 HTTP 与后端交互，不 import 后端任何代码。唯一跨目录的耦合是
+`src/api/*.spec.ts` 读 `../server/src/main/java/com/axle/` 的源码来锁契约 ——
+那是**测试**对注解与字面量的静态校验，改后端注解时这些用例会红，这是设计意图。
 
 ## 硬约束
 
@@ -130,7 +128,7 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
 
 - token 塞在请求头 **`authorization`（全小写）**，拦截器读的就是这个小写 key，
   写 `Authorization` 会 401。已由 `src/api/client.ts` 的拦截器统一处理。
-- 免登录路径仅：`/user/code` `/user/login` `/blog/hot` `/shop/**` `/shop-type/**` `/upload/**` `/voucher/**`
+- 免登录路径仅：`/user/code` `/user/login` `/review/hot` `/car/**` `/brand/**` `/upload/**` `/voucher/**`
 - 秒杀返回订单 id ≠ 已落库（Redis Stream 异步），**不要拿返回值立刻查订单**
 - Feed 流分页是 `lastId + offset`，不是 `current` 页码
 - GEO 附近车商需要 `navigator.geolocation` 坐标，不给坐标退化成普通分页
@@ -146,12 +144,12 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
    `GET /user/me` 才得到 `{id, nickName, icon}`。
 3. **`POST /user/logout` 是后端唯一的占位接口**（返回 `功能未完成`）。
    登出只能前端做：清 token + 回首页，**不能调后端**。
-4. **列表接口不返回 `total`**（`/shop/of/type`、`/blog/hot` 都走 `Result.ok(list)` 单参重载，
+4. **列表接口不返回 `total`**（`/car/list`、`/review/hot` 都走 `Result.ok(list)` 单参重载，
    `total` 恒为 `null`）。「还有没有下一页」只能按**满页判据**推（`deriveHasMore`）。
    代价是最后一批恰好凑满 10 条时多一次空请求（点一下没反应），这是没有 total 时无法避免的。
-5. **`/blog/hot` 返回的 `Blog` 是平铺形状**：作者是 `userId`/`name`/`icon` 三个平铺字段，
+5. **`/review/hot` 返回的是平铺形状**：作者是 `userId`/`name`/`icon` 三个平铺字段，
    `images` 是逗号串，`content` 是 **HTML 片段**（实测只有 `<br/>`，40 + 29 个）。
-   **必须过 `adapt.ts` 的 `blogToReview()`** ——
+   **必须过 `adapt.ts` 的 `reviewFromDTO()`** ——
    直接当 `Review` 用会让 `ReviewFeed` 读 `undefined.nickName` 抛 TypeError，
    **首页口碑区整块从 DOM 消失**，而控制台只有一条不显眼的错误。
    这条是 2026-10-16 真实踩到的（M1 时期没暴露，因为默认走 mock，而 mock 数据本来就是 `Review` 形状）。
@@ -163,11 +161,11 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
    > 但它**不是 sanitizer**：只吃换行标签，别的标签原样留着。M4 要渲染富文本时应该去用原始的
    > `BlogDTO`，而不是把这个函数扩成清洗器 —— 一个悄悄改写用户内容的适配层，
    > 比一个显示得不够漂亮的页面危险得多。
-6. **`GET /shop/{id}` 走的是「逻辑过期」缓存，冷缓存下直接返回 `店铺不存在`。**
+6. **`GET /car/{id}` 走的是「逻辑过期」缓存，冷缓存下直接返回 `车源不存在`。**
    `CacheClient.queryWithLogicalExpire` 命中不了就 `return null`，**不回查数据库**
-   （假设已被预热）。所以**清掉 `cache:shop:*` 后必须重灌**，否则车源列表正常、详情页全挂：
-   `hmdp-master/scripts/init-shop-cache.sh`（它自己就是先清空再重建，不要再单独 `del` 一次）。
-   2026-10-16 踩到：改坐标时按旧步骤清了缓存，14 个详情全变「店铺不存在」。
+   （假设已被预热）。所以**清掉 `cache:car:*` 后必须重灌**，否则车源列表正常、详情页全挂：
+   `../server/scripts/init-car-cache.sh`（它自己就是先清空再重建，不要再单独 `del` 一次）。
+   2026-10-16 踩到：改坐标时按旧步骤清了缓存，14 个详情全变「车源不存在」。
    预热一次即可 —— 值的 `expireTime` 到点后下一次读会拿互斥锁异步回源，之后自维持。
 
 > **秒杀只有三条错误消息**：`库存不足` / `禁止重复下单` / `优惠券不存在或库存未预热`。
@@ -180,8 +178,8 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
 14 台车只落在 **上海 5（1/2/3/7/9）、北京 5（6/11/12/13/14）、深圳 4（4/5/8/10）**，
 同城车辆彼此相距 2 km 上下。
 
-**为什么必须集中**：`/shop/of/type` 的半径是**硬编码**的 5 km
-（`ShopServiceImpl.java` 的 `new Distance(5000)`，没有参数可调）。原先 14 台散在
+**为什么必须集中**：`/car/list` 的半径是**硬编码**的 5 km
+（`CarServiceImpl.java` 的 `new Distance(5000)`，没有参数可调）。原先 14 台散在
 8 个城市、多数城市只有 1 台，「附近优先」在任何城市都只能查出 1 台 —— 看着像坏了。
 集中之后站在深圳南山是 4 台、上海人民广场是 5 台，`car.spec.ts` 有一组用例把这个分布锁住了
 （改了某台车的城市会立刻红）。
@@ -193,7 +191,7 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
 
 | 位置 | 作用 |
 |---|---|
-| `../hmdp-master/usedcar.sql` 的 `tb_shop.x/y`（连同 `address`） | 真机数据源 |
+| `../server/usedcar.sql` 的 `tb_shop.x/y`（连同 `address`） | 真机数据源 |
 | `src/api/mock.ts` 的 `mockCarCoords`（连同 `mockCars[].address`） | mock 数据源 |
 
 `car.ts` 的 `nearbyCars` 用同一套半径与球面距离现算，所以两处一致时
@@ -220,7 +218,7 @@ gsap.ticker.lagSmoothing(0)   // 漏了这行会抖
 放不放的判断只写在 `index.html` 的 `<head>` 内联脚本里（它必须早于 bundle、也必须早于
 字体 `<link>` —— 浏览器会阻塞普通 `<script>` 直到前面的样式表就绪），`src/lib/intro.ts`
 只读它留下的 `intro-boot` class —— **判断逻辑只有一份，两边都要改就是 bug**。
-时序表与「交接点为什么压在淡出前段」见 `docs/specs/` §6.4。
+时序表与「交接点为什么压在淡出前段」见 `../docs/specs/` §6.4。
 
 `SiteLayout` 由 `App.vue` 包住 `RouterView`，**view 里不要再包一层** ——
 每个 view 各包一层会让换路由时 header/footer 一起重建，转场就没法做。
@@ -291,7 +289,7 @@ src/
                   / PlaceholderView（M4+ 未交付路由的占位）
 
 public/cars/      车辆原图（jpg）+ 抠图产物（cut/*.webp）
-docs/             specs/ 设计文档、plans/ 实施计划、screenshots/ README 用图
+（设计文档与截图不在前端目录，统一放在仓库根 `../docs/`：specs / plans / screenshots）
 ```
 
 ### 什么时候用 Pinia，什么时候用 `lib/` 单例
@@ -333,7 +331,7 @@ docs/             specs/ 设计文档、plans/ 实施计划、screenshots/ READM
 
 ## 素材
 
-**完整规格见 `docs/specs/2026-10-15-二手车平台-design.md` §3.6 / §3.7**，换图前先读那两节。要点：
+**完整规格见 `../docs/specs/2026-10-15-二手车平台-design.md` §3.6 / §3.7**，换图前先读那两节。要点：
 
 - **别找「已经是透明 PNG」的图** —— 那类站基本禁商用（pngimg 是 CC BY-NC 4.0）。
   找一张干净的实景照（Unsplash / Pexels 免费商用），抠图交给 `scripts/cutout-cars.py`。

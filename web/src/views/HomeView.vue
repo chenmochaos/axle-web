@@ -20,7 +20,7 @@ const kind = ref<KindFilter>('all')
 /**
  * 切到某个大类时，把「该大类一台车都没有」的品牌整块撤掉 —— 点进去是空列表，留着是骗点击。
  *
- * `!brand.kinds` 的写法是**未知即不筛**，不是「什么都没有」：后端 `/shop-type/list`
+ * `!brand.kinds` 的写法是**未知即不筛**，不是「什么都没有」：后端 `/brand/list`
  * 不返回这一列，那时把品牌全撤掉会让导航整个消失，比多显示几个品牌糟得多。
  */
 const visibleBrands = computed(() =>

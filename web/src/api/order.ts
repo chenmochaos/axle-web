@@ -63,7 +63,7 @@ export function __resetMockOrderState(): void {
 /**
  * POST /voucher-order/seckill/{voucherId} —— 抢购。
  *
- * `voucherId` 是**券 id**，不是车 id。车 id 用来找到券（`fetchVouchersOfShop(carId)`），
+ * `voucherId` 是**券 id**，不是车 id。车 id 用来找到券（`fetchVouchersOfCar(carId)`），
  * 下单用的是券自己的 id —— 这两者在页面 URL 与请求体里同时出现，最容易混。
  *
  * ⚠️ **响应体的 `data` 是一个裸数字，不是对象。** 后端 `Result.ok(orderId)`

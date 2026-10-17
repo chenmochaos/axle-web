@@ -1,7 +1,16 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
 import type { ApiResult } from './types'
 
-const TOKEN_KEY = 'hmdp_token'
+const TOKEN_KEY = 'axle_token'
+
+/**
+ * 改名前的旧 key。**只用于一次性迁移，不是第二份存储。**
+ *
+ * 项目从 hmdp 改名到 AXLE 时，浏览器里可能还躺着旧 token。不迁移的话
+ * 所有已登录用户会静默掉线（没有任何报错，只是下一次请求变成 401）。
+ * 读到旧值就搬到新 key 并删掉旧 key —— 迁移只发生一次，之后旧 key 不复存在。
+ */
+const LEGACY_TOKEN_KEY = 'hmdp_token'
 
 /**
  * 是否走 mock 数据源。**全站唯一一处读 `VITE_USE_MOCK` 的地方。**
@@ -14,7 +23,16 @@ export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
 
 export function getToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY)
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (token) return token
+
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY)
+    if (legacy) {
+      localStorage.setItem(TOKEN_KEY, legacy)
+      localStorage.removeItem(LEGACY_TOKEN_KEY)
+      return legacy
+    }
+    return null
   } catch {
     // 隐私模式下 localStorage 可能直接抛异常
     return null
@@ -24,6 +42,7 @@ export function getToken(): string | null {
 export function setToken(token: string) {
   try {
     localStorage.setItem(TOKEN_KEY, token)
+    localStorage.removeItem(LEGACY_TOKEN_KEY)
   } catch {
     /* 存不进去就退化成当次会话内存态，不阻断流程 */
   }
@@ -32,6 +51,7 @@ export function setToken(token: string) {
 export function clearToken() {
   try {
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(LEGACY_TOKEN_KEY)
   } catch {
     /* 同上 */
   }
@@ -84,8 +104,19 @@ function handleUnauthorized(): void {
   unauthorizedHandler?.()
 }
 
+/**
+ * 接口前缀。
+ *
+ * - 开发（`pnpm dev`）：`/api`，由 Vite 代理剥掉前缀后转发到后端 8081。
+ * - 单 jar（`pnpm build:embed` + `mvn package`）：设为**空串**，直接打到同源的
+ *   后端根路径（后端控制器没有 `/api` 前缀）。
+ *
+ * 用 `??` 而不是 `||`：空串是一个有意义的配置值。
+ */
+const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+
 export const client: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE,
   timeout: 10_000,
 })
 

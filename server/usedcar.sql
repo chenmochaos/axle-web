@@ -122,8 +122,8 @@ ON DUPLICATE KEY UPDATE
 --     变速箱，硬塞进这两档是错的数据（mock 同理）。
 --   * `x` / `y` 按各自 `address` 所在城市给真实坐标，**并且刻意集中**：
 --     14 台车只落在 3 个城市（上海 5 / 北京 5 / 深圳 4），同城车辆彼此都在
---     2 km 上下。原因是 `/shop/of/type` 的半径**硬编码 5 km**
---     （`ShopServiceImpl.java` 的 `new Distance(5000)`），原先 14 台散在 8 个城市、
+--     2 km 上下。原因是 `/car/list` 的半径**硬编码 5 km**
+--     （`CarServiceImpl.java` 的 `new Distance(5000)`），原先 14 台散在 8 个城市、
 --     很多城市只有 1 台 —— 「附近优先」在任何城市都只能查出 1 台，看起来像坏了。
 --     集中之后同城 4–5 台相互都在半径内，这个开关才演示得出来。
 --     **改了这里就必须同步改 `web/src/api/mock.ts` 的 `mockCarCoords`**，
