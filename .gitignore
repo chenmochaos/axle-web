@@ -1,27 +1,55 @@
-# 依赖与产物
+# ── 密钥 ─────────────────────────────────────────────
+# 前端 .env 与后端 .env 都走这个规则；.env.example 是唯一允许提交的
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+server/.env
+server/.env.*
+!web/.env.example
+!server/.env.example
+
+# ── Node / 前端 ──────────────────────────────────────
 node_modules/
 dist/
 dist-ssr/
 *.tsbuildinfo
+web/dist/
+web/dist-ssr/
+web/node_modules/
 
-# 本地环境变量（连后端时写 VITE_USE_MOCK=false）
-.env
-.env.*
-!.env.example
+# ── Maven / 后端 ─────────────────────────────────────
+target/
+**/target/
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.jar
+*.war
 
-# 日志
+# 前端构建产物嵌入后端的位置（pnpm build:embed 写这里）
+server/src/main/resources/static/
+
+# ── Python（抠图流水线）─────────────────────────────
+.cutout-venv/
+__pycache__/
+*.pyc
+
+# ── 日志与临时产物 ───────────────────────────────────
 *.log
 npm-debug.log*
 pnpm-debug.log*
 jmeter.log
-
-# 抠图脚本的独立虚拟环境（见 scripts/cutout-cars.py）
-.cutout-venv/
-__pycache__/
-
-# 编辑器 / 系统
 .DS_Store
+
+# ── 编辑器 ───────────────────────────────────────────
 .idea/
 .vscode/*
 !.vscode/extensions.json
 *.swp
+*.iml
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings

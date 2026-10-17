@@ -1,0 +1,221 @@
+# AXLE · 精选二手车平台前端
+
+用 Vue 3 + TypeScript 写的前端，把[黑马程序员 Redis 教程](https://www.bilibili.com/video/BV1cr4y1671t)那套
+**hmdp（黑马点评）后端**重新包装成一个「严选二手性能车」交易平台。
+
+![首屏](docs/screenshots/hero.jpg)
+
+![车源列表](docs/screenshots/listings.jpg)
+
+## 这个项目要解决什么
+
+hmdp 后端是跟着教程写的 Redis 实战练习，功能其实相当完整 —— 手机号验证码登录、token 滑动续期、
+商铺缓存与逻辑过期、优惠券秒杀一人一单、Redis 分布式锁、点赞、关注 Feed 流、GEO 附近商铺。
+但教程自带的前端是 jQuery + 模板页面，只够证明接口通了。
+
+这个仓库把同一批接口接到一个**真看得过去的界面**上：车辆列表对应商铺，秒杀对应限时特价，
+点赞和关注对应口碑社区。后端代码一行没改，接口路径与响应结构完全不变。
+
+**后端不在本仓库里。** 见下方「连真实后端」。
+
+## 技术栈
+
+| 层 | 选型 | 说明 |
+|---|---|---|
+| 框架 | Vue 3.5 `<script setup>` | |
+| 构建 | Vite | |
+| 语言 | TypeScript | `vue-tsc` 严格校验 |
+| 样式 | Tailwind CSS v4 | 走 `@theme`，设计 token 集中在 `src/styles/tokens.css` |
+| 状态 | Pinia | |
+| 路由 | Vue Router | |
+| 动效 | GSAP 3（含 ScrollTrigger）+ Lenis | 两者共享同一个 rAF 时钟，避免滚动与动画打架 |
+| 请求 | axios | 拦截器统一注入 token、统一处理 401 |
+| 测试 | Vitest | |
+
+## 快速开始
+
+需要 Node 20+ 与 pnpm。
+
+```bash
+pnpm install
+pnpm dev            # http://localhost:5173
+```
+
+**默认走内置 mock 数据**，不需要后端就能看到完整首屏与车源列表。
+
+### 连真实后端
+
+前端请求 `/api/*`，由 Vite 代理到 `http://127.0.0.1:8081`（配置见 `vite.config.ts`）。
+后端接口路径与响应结构完全按原始 hmdp，因为前端没有改契约 —— 差异靠 `src/api/adapt.ts` 抹平。
+
+**这条路径现在是通的。** 后端改造脚本是 `../hmdp-master/usedcar.sql`
+（幂等，给 `tb_shop` 加 8 个车辆列、灌 14 台车源、给 `tb_shop_type` 加 `mark`）：
+
+```bash
+cd ../hmdp-master
+set -a && . ./.env && set +a
+mysql -udev -p"$MYSQL_PASSWORD" hmdp < usedcar.sql   # 必须用 mysql 命令行客户端（脚本里用了 DELIMITER）
+mvn spring-boot:run                                   # 实体改了，必须重启
+# 三个 Redis 初始化脚本，缺一不可（各自的文件头写清了「为什么」）
+./scripts/init-redis-geo.sh          # shop:geo:{typeId}  ← 「附近优先」
+./scripts/init-seckill-stock.sh      # seckill:stock:{voucherId}
+./scripts/init-shop-cache.sh         # cache:shop:{id}    ← 详情页
+```
+
+> ⚠️ **`init-shop-cache.sh` 是必须的，而且必须放在清缓存之后。**
+> 详情接口走的是「逻辑过期」方案，它的语义是**缓存没命中就直接返回 null、不回查数据库**
+> （`CacheClient.queryWithLogicalExpire`），所以冷缓存下 `GET /shop/{id}` 会回
+> `店铺不存在`，而车明明在 MySQL 里。早先的步骤里只写了
+> `redis-cli keys 'cache:shop*' | xargs -r redis-cli del` 且放在最后 ——
+> 照那个顺序做完，车源列表正常、详情页全挂。
+> `init-shop-cache.sh` 自己就是「先清空再重建」，所以**不要再单独 del 一次**。
+
+然后前端：
+
+```bash
+VITE_USE_MOCK=false pnpm dev --port 5174
+```
+
+> **两条数据源路径的差别是刻意做小的**：真机 14 台车、mock 13 台
+> （`tb_shop` 本来就有 14 行，不删行就只能填满），车 id 一一对应，
+> 所以 `/car/5`、`/seckill/5` 在两种模式下指向同一台车 —— 验收就是「同一页、两种数据源」。
+>
+> **车源坐标是刻意集中的**：14 台车只落在 3 个城市 —— **上海 5 台（1/2/3/7/9）、
+> 北京 5 台（6/11/12/13/14）、深圳 4 台（4/5/8/10）**，同城车辆彼此相距 2 km 上下。
+> 原因是 `/shop/of/type` 的半径**硬编码 5 km**（`ShopServiceImpl.java` 的
+> `new Distance(5000)`）—— 坐标散在 8 个城市、多数城市只有 1 台时，「附近优先」在任何
+> 城市都只能查出 1 台，看着像坏了。集中后站在深圳南山是 4 台、上海人民广场是 5 台。
+> 代价是**这 3 城之外的定位查出来就是空的**（列表页有空态文案说明，不静默降级）。
+> 坐标的真机来源是 `usedcar.sql` 里 `tb_shop` 的 `x`/`y`，mock 侧是
+> `mock.ts` 的 `mockCarCoords`，**两处必须同步改**。
+>
+> **两处已知的缺口**（都不是 bug，详见 `docs/specs/` §7.3 与 §9）：
+> ① `tb_blog` **没有改造**，真机首页口碑区仍是 hmdp 原始的餐厅探店内容，
+> 4 张图指向本仓库不存在的 `/imgs/blogs/...` —— 内容是 M4 的事；
+> ② 真机 `tb_shop_type` 多出的两个品牌（保时捷 / 沃尔沃）**没有车源**，点进去是空态列表。
+
+### 命令
+
+```bash
+pnpm dev          # 开发服务器
+pnpm typecheck    # vue-tsc 类型检查
+pnpm build        # 类型检查 + 生产构建
+pnpm preview      # 预览构建产物
+pnpm test         # Vitest
+```
+
+### 车辆抠图（可选）
+
+首屏的车是透明背景 WebP，由 `scripts/cutout-cars.py` 从 `public/cars/*.jpg` 生成：
+
+```bash
+python3 -m venv .cutout-venv
+.cutout-venv/bin/pip install onnxruntime numpy pillow scipy
+.cutout-venv/bin/python scripts/cutout-cars.py            # 默认 u2netp
+.cutout-venv/bin/python scripts/cutout-cars.py --model isnet-general-use   # 边缘更锐，需下 176MB
+```
+
+模型首次运行自动下载到 `~/.cache/hmdp-cutout/`。仓库里已经带了生成好的产物，
+不改素材的话不需要跑这条流水线。
+
+模型输入固定 320×320，脚本**按长边等比缩放再补边**，不是直接把源图拉成正方形 ——
+拉成正方形会让车变形、轮子被吃掉一块，竖幅素材受害最重（MX-5 那张是 3:4，
+横向会被撑胖 33%）。改这段投喂逻辑前先读 `infer()` 的注释。
+
+## 设计约定
+
+五条硬约束，写在 `CLAUDE.md` 里，改样式前先读：
+
+1. **全站亮色。** 统一 `#FFFFFF` 底，没有暗色区域，`tokens.css` 里也不再有暗色主题类。
+   唯一例外是压在车辆照片上的覆盖层。
+2. **界面零彩色。** UI 只用中性灰阶，靠明度反转做强调（主按钮 = 纯黑底白字）。
+   整站唯一的色彩来源是车辆照片本身，所以车漆才会跳出来。
+3. **字体分工。** `--font-display`（Oswald）只给全大写的拉丁展示文字 —— 字标、首屏主标题、
+   车名、栏目标签。中文正文走 `--font-sans`（Inter + Noto Sans SC）。Oswald 没有 CJK 字形，
+   中英混排的标题不能用它，否则一行里会掉回两种字体。
+
+首屏还有一条结构性约定：**车台盒子的尺寸写死**（`.hero-stage`），车图在盒内贴合下沿。
+这样切换车辆时页面高度不变、轮胎着地线恒定 —— 倒影和接地阴影才有稳定基准。
+盒内按**面积**归一（`h = sqrt(A / r)`，见 `src/lib/fit.ts`）：所有车占据相同面积，
+长宽比只决定它是宽而扁还是高而瘦。按高度归一的话，宽体车与高瘦车的面积差到 1.48 倍，
+高瘦的那台看起来就是小一号。
+
+**开场是白幕溶解**：全屏纯白 → AXLE 字标逐字浮现 → 幕布整体淡出，首屏从底下交叉溶解进来。
+纯白是全站底色，黑幕在白站上像故障态，所以用白幕 + 溶解。
+
+**每次完整文档加载都放**（含刷新与深链），站内 SPA 导航不放 —— 开场是进入体验的门，
+而「进入」= 一次完整文档加载。开发时用 `?nointro` 跳过；未要求减弱动效时才放。
+放不放的判断只写在 `index.html` 的 `<head>` 内联脚本里（必须早于 bundle 才能防住首帧闪底色），
+`src/lib/intro.ts` 只读它留下的 class。站内换页走 `App.vue` 的 `<Transition mode="out-in">`，
+所以 `SiteLayout` 在 `App.vue`，**view 里不要再包一层**。
+
+## 目录结构
+
+```
+src/
+├── api/          接口层（client / adapt / car / user / order / mock / types）
+│                 client.ts 是 axios 实例，也是 USE_MOCK 的唯一读者；adapt.ts 是唯一的字段映射处
+├── components/
+│   ├── business/ 业务组件（IntroCurtain / HeroSection / BrandNav / FilterBar / CarCard /
+│   │             FeaturedCars / ReviewFeed / CarHero / VoucherCards / StickyBuyBar）
+│   └── ui/       无业务语义的基础组件（AppButton / AppField / AppTag / StatCount / SkeletonBlock）
+├── composables/  useReveal（滚动入场）/ useCountUp（数字滚动）/ useCountdown / useScrollTo
+├── layouts/      SiteLayout（全站统一布局，由 App.vue 包住 RouterView）
+├── lib/          gsap / lenis / intro 单例；fit.ts（车台面积归一公式）；time.ts；flip.ts
+├── router/
+├── stores/       auth.ts（登录态，唯一的 Pinia store）
+├── styles/       tokens.css（设计 token）+ main.css（含路由转场）
+└── views/        HomeView / CarDetailView / LoginView / SeckillView / CarListView / PlaceholderView
+docs/
+├── specs/        设计文档
+└── plans/        实施计划
+```
+
+## 进度
+
+**M1（首页）**：首屏轮播、大类切换（全部 / 汽车 / 摩托）、品牌导航、精选车源、热门口碑、页脚。
+
+**M2（车辆详情 `/car/:id`）**：4:3 首屏大图（多角度时给缩略图条）、参数表、限时特价与购车券、
+车源所在地、相似车源、底部抢购条。从首页卡片点进来时，卡片图会**无缝放大**成详情页大图
+（手写 FLIP，不用 GSAP Flip 插件，原因见 `docs/specs/` §6.4）。
+
+**M3（登录 + 抢购 + 车源列表）**：
+
+- `/login` 手机号 + 验证码登录（60s 倒计时）；未登录点抢购会带 `next` 回程跳到登录页，
+  登录后自动回来
+- `/seckill/:id` 限时特价抢购 —— **`:id` 是车 id**（后端只有「按车查券」的接口，
+  URL 里放券 id 就没法刷新、也没法分享）。三态倒计时 + 剩余库存 + 一人一单
+- `/cars/:brand?` 车源列表：品牌 + 大类 + 「附近优先」（GEO）+ 加载更多
+- 后端 `usedcar.sql`：给 `tb_shop` 加 8 个车辆列、灌 14 台车源、给品牌表加 `mark`
+
+其余路由先落到 `PlaceholderView`，URL 结构已定死，后续按里程碑填实现：
+
+| 里程碑 | 页面 |
+|---|---|
+| M4 | 口碑广场、口碑详情、关注动态（含 `tb_blog` 的内容改造） |
+| M5 | 个人中心 |
+
+> **抢购成功后只给订单号，不给「我的订单」入口** —— 后端**没有任何订单查询接口**，
+> 而且那一单此刻还在 Redis Stream 里排队、数据库里还没有这行。
+> 所以文案是「下单请求已受理 / 订单正在生成」，不是「已购买成功」。
+>
+> 详情页上**没有**「预约看车」「收藏」这类按钮：后端没有对应接口，
+> 做了就是点下去没反应的假按钮。
+>
+> 列表页**没有**价格/里程排序：后端没有排序参数，拿已加载的那 10 条在客户端排，
+> 用户会读成「全站最便宜」，而在真机分页下那是错的（第 2 页可能有更便宜的）。
+
+## 素材与许可
+
+- **车辆照片是演示用占位素材**，来自公开图库与网络，**未取得明确商用授权**，
+  其中部分照片含厂商标识与车牌。它们仅用于演示界面效果。
+  本仓库的代码与这些图片的授权是两件事 —— 要在任何正式场景使用，请先替换 `public/cars/` 下的图片。
+- 自己换素材的方法（去哪找图、放哪、分辨率要求、选图标准）见
+  [`docs/specs/2026-10-15-二手车平台-design.md`](docs/specs/2026-10-15-二手车平台-design.md) §3.6，
+  首屏选车口径（朝向 / 配色 / 为什么不能靠缩略图判断）见 §3.7。
+  一句话版本：找一张干净的实景侧身照（Unsplash / Pexels，免费商用），
+  长边 ≥ 2500px，整车完整入画且四周留白，让抠图流水线处理背景。
+  入库前用 `scripts/cutout-cars.py --check` 筛一遍 —— 但它只是筛子，
+  产物要放大到 600px 以上人眼过一遍，玻璃幕墙这类与车身连成一片的背景它查不出来。
+- 字体 Inter 与 Oswald 通过 Google Fonts 加载，授权为 SIL Open Font License 1.1。
+- 仓库暂未附 LICENSE 文件。
