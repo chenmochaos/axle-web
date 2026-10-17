@@ -30,6 +30,9 @@
 --     `VoucherMapper.xml` 的 `WHERE v.status = 1` 会把它们挡在接口外，
 --     而 `tb_voucher_order` 里那两行早先压测留下的订单仍然指向存在的券，不会变成悬空引用。
 --   * `tb_seckill_voucher` 里 voucher 10 那行留着（它的券已下架，无影响）。
+--   * `tb_blog` id 4–7：标题、正文、配图、关联车源整体改写为二手车口碑（见 §4）。
+--     配图改指 `web/public/cars/` 下真实存在的文件，不再出现 404。
+--   * `tb_user` 里指向不存在文件的头像置空（见 §4），前端会走默认头像。
 --
 -- ── 已知的两处「不完美」，是上面那条约束的代价 ──────────────────────────────
 --   1. `tb_shop_type` 有 10 行而 mock 只有 8 个品牌，多出的 id 9/10 被复用成
@@ -284,11 +287,88 @@ ON DUPLICATE KEY UPDATE
   end_time   = VALUES(end_time);
 
 -- ---------------------------------------------------------------------------
--- 4. 自检：跑完应该正好 14 台车、10 个品牌、5 张在架券、3 张秒杀券
+-- 4. 口碑内容（`tb_blog`）与失效头像
+-- ---------------------------------------------------------------------------
+-- 教程的 4 条口碑是餐厅探店内容，配图 `/imgs/blogs/*` 在仓库里根本不存在。
+-- 这里把标题、正文、配图、关联车源整体改写成二手车口碑：
+--   * `shop_id` 指向真实车源（前端详情页会渲染「相关车源」块）
+--   * `images` 指向 `web/public/cars/` 下真实存在的文件 —— 真机不再是裂图
+--   * 正文用 `<br/>` 分段，与教程原有数据同一种形状（适配层会转成空格）
+--   * `liked` 保留原值；`comments` 改成量级合理的数字（评论功能未实现，仅展示用）
+--
+-- 只 UPDATE 指定 id，不 INSERT、不 DELETE：脚本仍然满足「不删任何一行」。
+UPDATE tb_blog SET
+  shop_id     = 9,
+  user_id     = 2,
+  title       = 'Model S Plaid 提车半年：加速之外，日常通勤也很稳',
+  images      = '/cars/model-s-2.jpg',
+  content     = '提车半年跑了一万二千公里，最直观的感受是安静。市区通勤电耗稳定在 15kWh 左右，家充一晚足够一周。<br/>三电机版本的加速确实夸张，但真正让我留下来的是一套很成熟的底盘和座椅。<br/>后排空间比想象中大，儿童安全座椅装好之后还能坐两个成年人。<br/>唯一要适应的是车身宽度，老小区的地库要多打两把方向。',
+  liked       = 1,
+  comments    = 8,
+  create_time = '2026-09-18 20:15:00',
+  update_time = '2026-09-18 20:15:00'
+WHERE id = 4;
+
+UPDATE tb_blog SET
+  shop_id     = 5,
+  user_id     = 2,
+  title       = 'M4 Competition 一年 1.4 万公里，真实用车成本',
+  images      = '/cars/bmw-m4-vorsteiner.jpg',
+  content     = '这台 M4 是我从上一任车主手里接的，接手时 8000 公里，现在 2.2 万。<br/>市区油耗 12L 上下，高速能压到 8L；保养按 1 万公里一次，小保养 2000 出头。<br/>S58 的动力随叫随到，但日常开舒适模式完全不会窜。<br/>后排能坐人，后备厢放两个登机箱没问题 —— 作为一台双门车，实用性超出预期。',
+  liked       = 1,
+  comments    = 5,
+  create_time = '2026-09-26 19:40:00',
+  update_time = '2026-09-26 19:40:00'
+WHERE id = 5;
+
+UPDATE tb_blog SET
+  shop_id     = 10,
+  user_id     = 1,
+  title       = 'MX-5 ND 手动挡三个月：通勤、跑山、停车都轻松',
+  images      = '/cars/mazda-mx5.jpeg',
+  content     = '一直想试试「驾驶者之车」，这台 ND 没让我失望。<br/>2.0L 自吸配 6MT，动力不大但变速箱手感极好，挡挡都愿意拉到 6000 转。<br/>车身短，地库和窄路掉头特别从容；敞篷打开之后，60km/h 的体感像 100。<br/>缺点也有：隔音一般，长途腰会累。但作为周末玩具，它几乎没有替代品。',
+  liked       = 1,
+  comments    = 3,
+  create_time = '2026-10-02 21:05:00',
+  update_time = '2026-10-02 21:05:00'
+WHERE id = 6;
+
+UPDATE tb_blog SET
+  shop_id     = 13,
+  user_id     = 1,
+  title       = '新手第一台仿赛：GSX250R 两千公里小结',
+  images      = '/cars/suzuki-gsx250r.jpeg',
+  content     = '拿证后第一台车，选它主要因为座高友好、二手保值。<br/>250cc 双缸动力温和，城市里超车够用，高速 100km/h 巡航也不飘。<br/>油耗实测 3L 左右，保养便宜，摔了也不心疼 —— 对新手来说这点很重要。<br/>骑了两千公里，唯一想升级的是原厂轮胎，雨天信心一般。',
+  liked       = 1,
+  comments    = 4,
+  create_time = '2026-10-11 18:20:00',
+  update_time = '2026-10-11 18:20:00'
+WHERE id = 7;
+
+-- 种子用户里两个昵称仍是自动生成的（`user_xxx`），改成正常人名。
+-- 用旧值做条件而不是只按 id，重跑时不会覆盖用户自己改过的昵称。
+UPDATE tb_user SET nick_name = '阿泽' WHERE id = 4 AND nick_name = 'user_slxaxy2au9f3tanffaxr';
+UPDATE tb_user SET nick_name = '小满' WHERE id = 6 AND nick_name = 'user_xn5wr3hpsv';
+
+-- 种子用户的头像指向 `/imgs/blogs/blog1.jpg` 与 `/imgs/icons/*`，这些文件都不存在。
+-- 置空后前端走默认头像，而不是一张裂图。
+UPDATE tb_user SET icon = '' WHERE icon IN (
+  '/imgs/blogs/blog1.jpg',
+  '/imgs/icons/kkjtbcr.jpg',
+  '/imgs/icons/user5-icon.png'
+);
+
+-- ---------------------------------------------------------------------------
+-- 5. 自检：跑完应该正好 14 台车、10 个品牌、5 张在架券、4 条口碑且全部指向
+--    真实车源。`tb_seckill_voucher` 是 4 行 = 3 张在售秒杀券 + voucher 10 的
+--    遗留行（券已下架，行保留以免历史订单悬空）。
 -- ---------------------------------------------------------------------------
 SELECT
   (SELECT COUNT(*) FROM tb_shop)                              AS shops,
   (SELECT COUNT(*) FROM tb_shop_type)                          AS brands,
   (SELECT COUNT(*) FROM tb_shop WHERE kind = 'motorcycle')      AS motorcycles,
   (SELECT COUNT(*) FROM tb_voucher WHERE status = 1)            AS vouchers_on_sale,
-  (SELECT COUNT(*) FROM tb_seckill_voucher)                     AS seckill_rows;
+  (SELECT COUNT(*) FROM tb_seckill_voucher)                     AS seckill_rows,
+  (SELECT COUNT(*) FROM tb_blog)                                AS reviews,
+  (SELECT COUNT(*) FROM tb_blog b
+     LEFT JOIN tb_shop s ON s.id = b.shop_id WHERE s.id IS NULL) AS reviews_without_car;
